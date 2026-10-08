@@ -6,14 +6,17 @@ type RawPlayer = { id: number; squadId: number; firstName: string; lastName: str
 type RawSquad = { id: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[] };
 type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number };
 type RawRound = { id: number; name: string; status: string; games: RawGame[] };
-type LivePlayer = { playerId: number; gameId: number; squadId: number; minutesPlayed: number; points: number; goalsScored: number; assists: number; saves: number; cleanSheet: number; clearances: number; blocks: number; tackles: number; interceptions: number; keyPasses: number; shotsOnTarget: number };
+export const statKeys = ["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "cleanSheet", "saves", "penaltySaves", "goalsConceded", "clearances", "blocks", "tackles", "interceptions", "yellowCards", "redCards", "ownGoals", "penaltyMisses", "hatTricks"] as const;
+export type StatKey = typeof statKeys[number];
+type LivePlayer = { playerId: number; gameId: number; squadId: number } & Partial<Record<StatKey, number>>;
 type LiveSquad = { squadId: number; gameId: number; win: number; draw: number; awayWin: number; cleanSheet: number; goalsScored: number };
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
 export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; score: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
+export type PlayerStat = { id: number; fullName: string; team: string; position: Position; appearances: number; ownership: number; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
-export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
+export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API}/${path}`, { headers: { "user-agent": "Fantasy-EFL-Data-Board/1.0" } });
@@ -28,7 +31,7 @@ function unescapeHtml(value: string) {
 // Only use club-published 2026/27 headshots whose season or upload date is verifiable.
 // A missing match is deliberately represented by the club jersey, never an undated photo.
 const officialPortraits: Record<string, { club: string; url: string }> = {
-  "finnazaz": { club: "Southampton", url: "https://res.cloudinary.com/southampton/image/upload/v1786625823/Player%20Profiles/Men%27s%20Team/2026-27/Finn_Azaz_Profile_n6lica.png" },
+  "finnazaz": { club: "Southampton", url: "https://res.cloudinary.com/southampton/image/upload/c_fill,g_face,w_320,h_320/v1786625823/Player%20Profiles/Men%27s%20Team/2026-27/Finn_Azaz_Profile_n6lica.png" },
   "charlielakin": { club: "Barnet", url: "https://barnetfc.com/wp-content/uploads/2026/08/BFC_WebHeadshot-CharlieLakin_spons.jpg" },
   "georgewickens": { club: "Lincoln", url: "https://cdn.weareimps.com/sites/default/files/styles/cc_960x1280/public/2026-08/george_wickens.png?h=e8711843&itok=3XAOVw-Q" },
   "jackfitzwater": { club: "Exeter", url: "https://cdn.exetercityfc.co.uk/sites/default/files/styles/cc_960x1280/public/2026-08/Jack%20Fitzwater%20Headshot.png.jpeg?itok=t7oJkPOK" },
@@ -91,6 +94,7 @@ async function calculateDashboard(): Promise<DashboardData> {
   const teamGames = new Map<number, Set<number>>();
   const teamAgg = new Map<number, { games: number; wins: number; draws: number; cleanSheets: number; goals: number }>();
   const playerAgg = new Map<number, { games: number; minutes: number; sixty: number; points: number; goals: number; assists: number; saves: number; cleanSheets: number; clearances: number; blocks: number; tackles: number; interceptions: number; keyPasses: number; shotsOnTarget: number }>();
+  const playerEventTotals = new Map<number, { games: number; totals: Record<StatKey, number> }>();
   for (const live of lives) {
     for (const row of live.squads) {
       const seen = teamGames.get(row.squadId) ?? new Set<number>(); seen.add(row.gameId); teamGames.set(row.squadId, seen);
@@ -98,8 +102,12 @@ async function calculateDashboard(): Promise<DashboardData> {
       agg.games += 1; agg.wins += row.win; agg.draws += row.draw; agg.cleanSheets += row.cleanSheet; agg.goals += row.goalsScored; teamAgg.set(row.squadId, agg);
     }
     for (const row of live.players) {
+      const events = playerEventTotals.get(row.playerId) ?? { games: 0, totals: Object.fromEntries(statKeys.map((key) => [key, 0])) as Record<StatKey, number> };
+      events.games += 1;
+      for (const key of statKeys) events.totals[key] += row[key] ?? 0;
+      playerEventTotals.set(row.playerId, events);
       const agg = playerAgg.get(row.playerId) ?? { games: 0, minutes: 0, sixty: 0, points: 0, goals: 0, assists: 0, saves: 0, cleanSheets: 0, clearances: 0, blocks: 0, tackles: 0, interceptions: 0, keyPasses: 0, shotsOnTarget: 0 };
-      agg.games += 1; agg.minutes += row.minutesPlayed; agg.sixty += row.minutesPlayed >= 60 ? 1 : 0; agg.points += row.points; agg.goals += row.goalsScored; agg.assists += row.assists; agg.saves += row.saves; agg.cleanSheets += row.cleanSheet; agg.clearances += row.clearances; agg.blocks += row.blocks; agg.tackles += row.tackles; agg.interceptions += row.interceptions; agg.keyPasses += row.keyPasses; agg.shotsOnTarget += row.shotsOnTarget; playerAgg.set(row.playerId, agg);
+      agg.games += 1; agg.minutes += row.minutesPlayed ?? 0; agg.sixty += (row.minutesPlayed ?? 0) >= 60 ? 1 : 0; agg.points += row.points ?? 0; agg.goals += row.goalsScored ?? 0; agg.assists += row.assists ?? 0; agg.saves += row.saves ?? 0; agg.cleanSheets += row.cleanSheet ?? 0; agg.clearances += row.clearances ?? 0; agg.blocks += row.blocks ?? 0; agg.tackles += row.tackles ?? 0; agg.interceptions += row.interceptions ?? 0; agg.keyPasses += row.keyPasses ?? 0; agg.shotsOnTarget += row.shotsOnTarget ?? 0; playerAgg.set(row.playerId, agg);
     }
   }
 
@@ -127,6 +135,11 @@ async function calculateDashboard(): Promise<DashboardData> {
   const visiblePlayers = Object.values(picks).flat();
   for (const player of visiblePlayers) player.avatarUrl = getPlayerAvatar(player.fullName, player.team) ?? player.fallbackImage;
   const startingSeven = [picks.FWD[0], picks.MID[0], picks.GK[0], ...picks.DEF.slice(0, 2), picks.MID[1], picks.FWD[1]].filter(Boolean);
+  const playerStats: PlayerStat[] = players.flatMap((player) => {
+    const events = playerEventTotals.get(player.id);
+    if (!events?.games) return [];
+    return [{ id: player.id, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
+  });
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
     const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
     const teamFixtures = fixtures.get(squad.id)!;
@@ -135,7 +148,7 @@ async function calculateDashboard(): Promise<DashboardData> {
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 2 }, picks, startingSeven, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 2 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {

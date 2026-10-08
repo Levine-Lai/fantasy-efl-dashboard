@@ -1,8 +1,9 @@
 "use client";
 
-import { Activity, CalendarDays, Clock3, Crosshair, Newspaper, ShieldCheck, Sparkles, Trophy } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Clock3, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DashboardData, PlayerPick } from "@/lib/dashboard-data";
+import type { DashboardData, PlayerPick, PlayerStat, StatKey } from "@/lib/dashboard-data";
 
 const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
@@ -41,13 +42,74 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
   );
 }
 
+const statColumns: { key: StatKey; label: string }[] = [
+  { key: "points", label: "得分" }, { key: "minutesPlayed", label: "分钟" },
+  { key: "goalsScored", label: "进球" }, { key: "assists", label: "助攻" },
+  { key: "keyPasses", label: "关键传球" }, { key: "shotsOnTarget", label: "射正" },
+  { key: "cleanSheet", label: "零封" }, { key: "saves", label: "扑救" },
+  { key: "penaltySaves", label: "扑点" }, { key: "goalsConceded", label: "失球" },
+  { key: "clearances", label: "解围" }, { key: "blocks", label: "封堵" },
+  { key: "tackles", label: "抢断" }, { key: "interceptions", label: "拦截" },
+  { key: "yellowCards", label: "黄牌" }, { key: "redCards", label: "红牌" },
+  { key: "ownGoals", label: "乌龙" }, { key: "penaltyMisses", label: "失点" },
+  { key: "hatTricks", label: "帽子戏法" },
+];
+
+function StatsTable({ players }: { players: PlayerStat[] }) {
+  const [query, setQuery] = useState("");
+  const [position, setPosition] = useState("ALL");
+  const [minimum, setMinimum] = useState(3);
+  const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
+  const [descending, setDescending] = useState(true);
+  const [page, setPage] = useState(0);
+  const filtered = useMemo(() => players
+    .filter((player) => player.appearances >= minimum && (position === "ALL" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
+    .sort((a, b) => {
+      const left = sortKey === "appearances" ? a.appearances : a.perGame[sortKey];
+      const right = sortKey === "appearances" ? b.appearances : b.perGame[sortKey];
+      return (descending ? right - left : left - right) || b.appearances - a.appearances || a.fullName.localeCompare(b.fullName);
+    }), [players, minimum, position, query, sortKey, descending]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / 30));
+  const currentPage = Math.min(page, totalPages - 1);
+  const visible = filtered.slice(currentPage * 30, (currentPage + 1) * 30);
+  const changeSort = (key: StatKey | "appearances") => {
+    setDescending(sortKey === key ? !descending : true);
+    setSortKey(key);
+    setPage(0);
+  };
+  const sortHeading = (key: StatKey | "appearances", label: string) => (
+    <th key={key} scope="col" aria-sort={sortKey === key ? (descending ? "descending" : "ascending") : "none"}>
+      <button type="button" onClick={() => changeSort(key)}>{label}<span aria-hidden="true">{sortKey === key ? (descending ? "↓" : "↑") : "↕"}</span></button>
+    </th>
+  );
+  return (
+    <section className="panel stats-panel" id="stats">
+      <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL 官方比赛数据</span></div>
+      <div className="stats-toolbar">
+        <label><span>搜索</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="球员或球队" /></label>
+        <label><span>位置</span><select value={position} onChange={(event) => { setPosition(event.target.value); setPage(0); }}><option value="ALL">全部</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</select></label>
+        <label><span>至少出场</span><select value={minimum} onChange={(event) => { setMinimum(Number(event.target.value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></select></label>
+        <span className="stats-count">{filtered.length} 人</span>
+      </div>
+      <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
+        <table className="stats-table">
+          <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{statColumns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{statColumns.map(({ key }) => <td key={key}>{player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+        </table>
+        {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
+      </div>
+      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
+    </section>
+  );
+}
+
 export function Dashboard({ data }: { data: DashboardData }) {
   const updated = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Shanghai" }).format(new Date(data.meta.updatedAt));
   return (
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><span className="brand-mark">FE</span><span>FANTASY EFL</span></a>
-        <nav><a href="#recommendations">推荐</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
+        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
         <div className="update-chip"><Clock3 size={15} />每日 08:00</div>
       </header>
 
@@ -64,29 +126,19 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
         <section className="lead-grid">
           <div className="panel selection-panel">
-            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮七人</h2></div><span>综合指数</span></div>
-            <div className="seven-grid">
-              {data.startingSeven.map((player, index) => (
-                <div className={`seven-card ${index === 0 ? "captain-card" : ""}`} key={`${player.position}-${player.id}`}>
-                  <div className="seven-top"><span>{player.position}</span><b>{player.score}</b></div>
-                  <RichImage className="seven-avatar" src={player.avatarUrl} fallback={player.fallbackImage} alt={player.fullName} />
-                  <RichImage className="seven-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
-                  <strong>{player.name}</strong><small>{player.team}</small><p>{player.fixtures.join(" · ")}</p>
-                  {index === 0 && <span className="captain">C</span>}
-                </div>
-              ))}
+            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮七人</h2></div><span>1–2–2–2</span></div>
+            <div className="lineup-pitch" aria-label="本轮七人阵型">
+              {positions.map((position) => <div className="lineup-row" key={position}>
+                {data.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
+                  <span className="lineup-position">{position}</span>
+                  <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
+                  <RichImage className={`lineup-avatar${player.avatarUrl !== player.fallbackImage ? " lineup-portrait" : ""}`} src={player.avatarUrl} fallback={player.fallbackImage} alt={player.fullName} />
+                  <strong>{player.name}</strong><small>{player.team}</small>
+                  {player.id === data.startingSeven[0]?.id && <span className="lineup-captain" aria-label="队长">C</span>}
+                </div>)}
+              </div>)}
             </div>
           </div>
-
-          <aside className="panel signal-panel">
-            <div className="section-heading"><div><Activity size={18} /><h2>轮次信号</h2></div></div>
-            <div className="signal-list">
-              <div><CalendarDays /><span>赛程密度</span><strong>{data.meta.doubleTeams ? "双赛周" : "单赛周"}</strong></div>
-              <div><ShieldCheck /><span>首发门槛</span><strong>≥ 75%</strong></div>
-              <div><Crosshair /><span>低持有池</span><strong>{data.differentialCount} 人</strong></div>
-              <div><Trophy /><span>队长</span><strong>{data.startingSeven[0]?.name}</strong></div>
-            </div>
-          </aside>
         </section>
 
         <section className="panel recommendations" id="recommendations">
@@ -100,6 +152,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
             ))}
           </Tabs>
         </section>
+
+        <StatsTable players={data.playerStats} />
 
         <section className="lower-grid">
           <div className="panel" id="clubs">
