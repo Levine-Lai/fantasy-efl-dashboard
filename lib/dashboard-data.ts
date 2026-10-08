@@ -28,24 +28,6 @@ function unescapeHtml(value: string) {
   return value.replaceAll("&amp;", "&").replaceAll("&quot;", '"').replaceAll("&#39;", "'").replaceAll("&apos;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
 }
 
-// Only use club-published 2026/27 headshots whose season or upload date is verifiable.
-// A missing match is deliberately represented by the club jersey, never an undated photo.
-const officialPortraits: Record<string, { club: string; url: string }> = {
-  "finnazaz": { club: "Southampton", url: "https://res.cloudinary.com/southampton/image/upload/c_fill,g_face,w_320,h_320/v1786625823/Player%20Profiles/Men%27s%20Team/2026-27/Finn_Azaz_Profile_n6lica.png" },
-  "charlielakin": { club: "Barnet", url: "https://barnetfc.com/wp-content/uploads/2026/08/BFC_WebHeadshot-CharlieLakin_spons.jpg" },
-  "georgewickens": { club: "Lincoln", url: "https://cdn.weareimps.com/sites/default/files/styles/cc_960x1280/public/2026-08/george_wickens.png?h=e8711843&itok=3XAOVw-Q" },
-  "jackfitzwater": { club: "Exeter", url: "https://cdn.exetercityfc.co.uk/sites/default/files/styles/cc_960x1280/public/2026-08/Jack%20Fitzwater%20Headshot.png.jpeg?itok=t7oJkPOK" },
-  "lawrencevigouroux": { club: "Swansea", url: "https://cdn.swanseacity.com/sites/default/files/styles/cc_960x960/public/2026-08/website-headshots-2026-27-lawrence-vigouroux.png?h=a05dec19&itok=56FNPuXU" },
-};
-
-function getPlayerAvatar(fullName: string, team: string): string | null {
-  const seasonStartYear = new Date().getUTCMonth() >= 6 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
-  if (seasonStartYear !== 2026) return null;
-  const key = fullName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const portrait = officialPortraits[key];
-  return portrait && team.toLowerCase().includes(portrait.club.toLowerCase()) ? portrait.url : null;
-}
-
 async function getNews(): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
   try {
@@ -81,7 +63,7 @@ async function calculateDashboard(): Promise<DashboardData> {
   const activeRounds = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status)));
   const target = activeRounds.find((round) => round.status !== "completed") ?? activeRounds.at(-1)!;
   const completed = activeRounds.filter((round) => round.id < target.id && round.status === "completed");
-  const lives = await Promise.all(completed.map((round) => getJson<LiveRound>(`live_scores/${round.id}.json`).catch(() => ({ players: [], squads: [] }))));
+  const lives = await Promise.all(completed.map((round) => getJson<LiveRound>(`live_scores/${round.id}.json`)));
   const names = new Map(squads.map((squad) => [squad.id, squad.shortName || squad.name]));
   const squadsById = new Map(squads.map((squad) => [squad.id, squad]));
   const fixtures = new Map<number, string[]>();
@@ -133,7 +115,7 @@ async function calculateDashboard(): Promise<DashboardData> {
   allPicks.sort((a, b) => b.score - a.score);
   const picks = Object.fromEntries(["GK", "DEF", "MID", "FWD"].map((position) => [position, allPicks.filter((player) => player.position === position).slice(0, 5)])) as Record<Position, PlayerPick[]>;
   const visiblePlayers = Object.values(picks).flat();
-  for (const player of visiblePlayers) player.avatarUrl = getPlayerAvatar(player.fullName, player.team) ?? player.fallbackImage;
+  for (const player of visiblePlayers) player.avatarUrl = player.fallbackImage;
   const startingSeven = [picks.FWD[0], picks.MID[0], picks.GK[0], ...picks.DEF.slice(0, 2), picks.MID[1], picks.FWD[1]].filter(Boolean);
   const playerStats: PlayerStat[] = players.flatMap((player) => {
     const events = playerEventTotals.get(player.id);
@@ -148,7 +130,7 @@ async function calculateDashboard(): Promise<DashboardData> {
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 2 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 3 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
@@ -164,7 +146,7 @@ export async function refreshDashboardData() { const data = await calculateDashb
 export async function getDashboardData(): Promise<DashboardData> {
   const cached = await readCache();
   const age = cached ? Date.now() - new Date(cached.meta.updatedAt).getTime() : Number.POSITIVE_INFINITY;
-  const hasRichImages = cached?.meta.portraitVersion === 2 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
+  const hasRichImages = cached?.meta.portraitVersion === 3 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
   if (cached && hasRichImages && age < 24 * 60 * 60 * 1000) return cached;
   try { return await refreshDashboardData(); } catch (error) { if (cached) return cached; throw error; }
 }

@@ -27,7 +27,7 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
     <article className="player-row">
       <div className="rank">{String(rank).padStart(2, "0")}</div>
       <div className="player-visual">
-        <RichImage className="player-avatar" src={player.avatarUrl} fallback={player.fallbackImage} alt={player.fullName} />
+        <RichImage className="player-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
         <RichImage className="mini-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
       </div>
       <div className="player-main">
@@ -94,11 +94,11 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{statColumns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{statColumns.map(({ key }) => <td key={key}>{player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{statColumns.map(({ key }) => <td key={key} className={player.perGame[key] === 0 ? "stats-zero" : undefined}>{player.perGame[key] === 0 ? "—" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
-      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
+      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数；— = 真实零次</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
     </section>
   );
 }
@@ -132,11 +132,18 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 {data.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
                   <span className="lineup-position">{position}</span>
                   <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
-                  <RichImage className={`lineup-avatar${player.avatarUrl !== player.fallbackImage ? " lineup-portrait" : ""}`} src={player.avatarUrl} fallback={player.fallbackImage} alt={player.fullName} />
+                  <RichImage className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
                   <strong>{player.name}</strong><small>{player.team}</small>
                   {player.id === data.startingSeven[0]?.id && <span className="lineup-captain" aria-label="队长">C</span>}
                 </div>)}
               </div>)}
+            </div>
+            <div className="lineup-fixtures">
+              <h3>本轮赛程</h3>
+              <div className="lineup-fixture-list">{data.startingSeven.map((player) => <div className="lineup-fixture" key={player.id}>
+                <span className="fixture-player">{player.name}</span>
+                <span className="fixture-matches">{player.fixtures.map((fixture, index) => <span className="fixture-chip" key={`${fixture}-${index}`}>{fixture}</span>)}</span>
+              </div>)}</div>
             </div>
           </div>
         </section>

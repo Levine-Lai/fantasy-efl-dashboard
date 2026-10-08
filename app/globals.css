@@ -77,10 +77,16 @@ a { color: inherit; text-decoration: none; }
 .lineup-position { position: absolute; top: 8px; left: 10px; color: var(--prussian); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 .lineup-crest { position: absolute; top: 7px; right: 8px; width: 24px; height: 24px; object-fit: contain; }
 .lineup-avatar { width: 100px; height: 98px; margin-top: 3px; object-fit: contain; object-position: bottom center; }
-.lineup-avatar.lineup-portrait { width: 96px; height: 96px; margin-top: 5px; object-fit: cover; object-position: center 18%; border-radius: 8px; background: var(--ice); }
 .lineup-card strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.15; }
 .lineup-card small { max-width: 100%; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--prussian); font-size: 11px; }
 .lineup-captain { position: absolute; right: -8px; bottom: 21px; display: grid; place-items: center; width: 25px; height: 25px; border: 2px solid var(--white); border-radius: 50%; color: var(--white); background: var(--navy); font-size: 12px; font-weight: 800; }
+.lineup-fixtures { padding-top: 18px; }
+.lineup-fixtures h3 { margin: 0 0 12px; color: var(--prussian); font-size: 14px; }
+.lineup-fixture-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.lineup-fixture { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 43px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.fixture-player { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 750; }
+.fixture-matches { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; }
+.fixture-chip { padding: 4px 6px; border-radius: 5px; color: var(--prussian); background: var(--ice); font-size: 11px; white-space: nowrap; }
 
 .recommendations { margin-top: 18px; overflow: hidden; }
 .wide-heading { margin: 0; padding: 20px 20px 12px; }
@@ -125,6 +131,7 @@ a { color: inherit; text-decoration: none; }
 .stats-table .stats-name-col { position: sticky; left: 0; z-index: 1; width: 190px; min-width: 190px; max-width: 190px; text-align: left; background: var(--white); box-shadow: 1px 0 var(--border); }
 .stats-table thead .stats-name-col { z-index: 3; background: var(--ice); }
 .stats-table tbody tr:hover .stats-name-col { background: var(--ice); }
+.stats-table .stats-zero { color: color-mix(in srgb, var(--prussian) 48%, var(--white)); }
 .stats-name-col strong, .stats-name-col small { display: block; overflow: hidden; text-overflow: ellipsis; }
 .stats-name-col small { margin-top: 3px; color: var(--prussian); font-size: 11px; font-weight: 400; }
 .stats-empty { padding: 32px 20px; color: var(--prussian); text-align: center; }
@@ -169,6 +176,7 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .metric { border-bottom: 1px solid color-mix(in srgb, var(--white) 15%, transparent); }
   .lower-grid { grid-template-columns: 1fr; }
   .lineup-row { gap: 22px; }
+  .lineup-fixture-list { grid-template-columns: 1fr; }
   .player-row { grid-template-columns: 30px 48px minmax(0, 1fr) 55px 62px; gap: 5px; }
   .ownership-stat, .desktop-stat { display: none; }
   .player-meta { flex-direction: column; gap: 2px; }
@@ -188,7 +196,6 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .lineup-row { gap: 14px; }
   .lineup-card { width: min(128px, 43%); height: 132px; padding: 5px; }
   .lineup-avatar { width: 85px; max-width: 90%; height: 83px; margin-top: 4px; }
-  .lineup-avatar.lineup-portrait { width: 84px; height: 83px; margin-top: 4px; }
   .lineup-card strong { font-size: 12px; }
   .lineup-card small { font-size: 10px; }
   .lineup-crest { width: 20px; height: 20px; }
