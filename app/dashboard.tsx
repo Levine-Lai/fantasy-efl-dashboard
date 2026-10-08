@@ -57,18 +57,19 @@ const statColumns: { key: StatKey; label: string }[] = [
 
 function StatsTable({ players }: { players: PlayerStat[] }) {
   const [query, setQuery] = useState("");
+  const [competition, setCompetition] = useState("ALL");
   const [position, setPosition] = useState("ALL");
   const [minimum, setMinimum] = useState(3);
   const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
   const [descending, setDescending] = useState(true);
   const [page, setPage] = useState(0);
   const filtered = useMemo(() => players
-    .filter((player) => player.appearances >= minimum && (position === "ALL" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((player) => player.appearances >= minimum && (competition === "ALL" || player.competitionId === Number(competition)) && (position === "ALL" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
       const left = sortKey === "appearances" ? a.appearances : a.perGame[sortKey];
       const right = sortKey === "appearances" ? b.appearances : b.perGame[sortKey];
       return (descending ? right - left : left - right) || b.appearances - a.appearances || a.fullName.localeCompare(b.fullName);
-    }), [players, minimum, position, query, sortKey, descending]);
+    }), [players, minimum, competition, position, query, sortKey, descending]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / 30));
   const currentPage = Math.min(page, totalPages - 1);
   const visible = filtered.slice(currentPage * 30, (currentPage + 1) * 30);
@@ -87,6 +88,7 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL 官方比赛数据</span></div>
       <div className="stats-toolbar">
         <label><span>搜索</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="球员或球队" /></label>
+        <label><span>联赛级别</span><select value={competition} onChange={(event) => { setCompetition(event.target.value); setPage(0); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
         <label><span>位置</span><select value={position} onChange={(event) => { setPosition(event.target.value); setPage(0); }}><option value="ALL">全部</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</select></label>
         <label><span>至少出场</span><select value={minimum} onChange={(event) => { setMinimum(Number(event.target.value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></select></label>
         <span className="stats-count">{filtered.length} 人</span>

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 
 const API = "https://fantasy.efl.com/json/fantasy";
 type Position = "GK" | "DEF" | "MID" | "FWD";
-type RawPlayer = { id: number; squadId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; totalPoints: number; injuryDetails?: string | null; suspensionDetails?: string | null };
+type RawPlayer = { id: number; squadId: number; competitionId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; totalPoints: number; injuryDetails?: string | null; suspensionDetails?: string | null };
 type RawSquad = { id: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[] };
 type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number };
 type RawRound = { id: number; name: string; status: string; games: RawGame[] };
@@ -13,7 +13,7 @@ type LiveSquad = { squadId: number; gameId: number; win: number; draw: number; a
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
 export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; score: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
-export type PlayerStat = { id: number; fullName: string; team: string; position: Position; appearances: number; ownership: number; perGame: Record<StatKey, number> };
+export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
 export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
@@ -120,7 +120,7 @@ async function calculateDashboard(): Promise<DashboardData> {
   const playerStats: PlayerStat[] = players.flatMap((player) => {
     const events = playerEventTotals.get(player.id);
     if (!events?.games) return [];
-    return [{ id: player.id, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
+    return [{ id: player.id, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
   });
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
     const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
