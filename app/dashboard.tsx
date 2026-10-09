@@ -129,7 +129,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
         <section className="lead-grid">
           <div className="panel selection-panel">
-            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮七人</h2></div><span>1–2–2–2</span></div>
+            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮七人</h2></div><span>队长 {captain?.name} · {captain?.fixtures.length} 场 · 预计 {captain?.score} 分</span></div>
             <div className="lineup-pitch" aria-label="本轮七人阵型">
               {positions.map((position) => <div className="lineup-row" key={position}>
                 {data.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
