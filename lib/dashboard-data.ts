@@ -16,7 +16,7 @@ export type PlayerPick = { id: number; name: string; fullName: string; team: str
 export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
-export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
+export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number; modelVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API}/${path}`, { headers: { "user-agent": "Fantasy-EFL-Data-Board/1.0" } });
@@ -103,13 +103,20 @@ async function calculateDashboard(): Promise<DashboardData> {
     if (clubGames >= 3 && reliability < 0.5) continue;
     const per90 = (value: number) => agg.minutes ? value * 90 / agg.minutes : 0;
     let underlying = 0;
-    if (player.position === "GK") underlying = per90(agg.saves) * 0.75 + agg.cleanSheets * 0.8;
-    if (player.position === "DEF") underlying = per90(agg.clearances) * 0.18 + per90(agg.blocks) * 0.8 + per90(agg.tackles) * 0.45 + per90(agg.interceptions) * 0.45 + agg.cleanSheets * 0.7 + agg.goals * 1.8 + agg.assists;
-    if (player.position === "MID") underlying = per90(agg.keyPasses) * 0.7 + per90(agg.shotsOnTarget) * 1.15 + per90(agg.interceptions) * 0.35 + agg.goals * 1.6 + agg.assists;
-    if (player.position === "FWD") underlying = per90(agg.keyPasses) * 0.5 + per90(agg.shotsOnTarget) * 1.45 + agg.goals * 1.7 + agg.assists;
+    if (player.position === "GK") underlying = per90(agg.saves) * 0.75 + per90(agg.cleanSheets) * 0.8;
+    if (player.position === "DEF") underlying = per90(agg.clearances) * 0.18 + per90(agg.blocks) * 0.8 + per90(agg.tackles) * 0.45 + per90(agg.interceptions) * 0.45 + per90(agg.cleanSheets) * 0.7 + per90(agg.goals) * 1.8 + per90(agg.assists);
+    if (player.position === "MID") underlying = per90(agg.keyPasses) * 0.7 + per90(agg.shotsOnTarget) * 1.15 + per90(agg.interceptions) * 0.35 + per90(agg.goals) * 1.6 + per90(agg.assists);
+    if (player.position === "FWD") underlying = per90(agg.keyPasses) * 0.5 + per90(agg.shotsOnTarget) * 1.45 + per90(agg.goals) * 1.7 + per90(agg.assists);
     const pointsPerGame = agg.points / Math.max(1, agg.games);
-    const scoreRaw = playerFixtures.length * 4.2 + reliability * 7 + pointsPerGame * 1.2 + underlying;
     const squad = squadsById.get(player.squadId);
+    const expectedPerMatch = pointsPerGame * 0.8 + underlying * 0.2;
+    const playingFactor = 0.5 + reliability * 0.5;
+    const scoreRaw = playerFixtures.reduce((total, fixture, index) => {
+      const difficulty = fixture.startsWith("主") ? squad?.fdrHome ?? 3 : squad?.fdrAway ?? 3;
+      const difficultyFactor = 1 + (3 - difficulty) * 0.06;
+      const rotationFactor = index === 0 ? 1 : 0.85 + reliability * 0.15;
+      return total + expectedPerMatch * playingFactor * difficultyFactor * rotationFactor;
+    }, 0);
     allPicks.push({ id: player.id, name: player.displayName, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures, reliability: Math.round(reliability * 100), score: Number(scoreRaw.toFixed(1)), underlying: Number(underlying.toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
   }
   allPicks.sort((a, b) => b.score - a.score);
@@ -130,7 +137,7 @@ async function calculateDashboard(): Promise<DashboardData> {
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 3 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 3, modelVersion: 2 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
@@ -147,6 +154,6 @@ export async function getDashboardData(): Promise<DashboardData> {
   const cached = await readCache();
   const age = cached ? Date.now() - new Date(cached.meta.updatedAt).getTime() : Number.POSITIVE_INFINITY;
   const hasRichImages = cached?.meta.portraitVersion === 3 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
-  if (cached && hasRichImages && age < 24 * 60 * 60 * 1000) return cached;
+  if (cached && hasRichImages && cached.meta.modelVersion === 2 && age < 24 * 60 * 60 * 1000) return cached;
   try { return await refreshDashboardData(); } catch (error) { if (cached) return cached; throw error; }
 }

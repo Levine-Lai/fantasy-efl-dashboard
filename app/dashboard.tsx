@@ -37,7 +37,7 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
       <div className="player-stat"><span>出勤</span><b>{player.reliability}%</b></div>
       <div className="player-stat ownership-stat"><span>持有</span><b>{player.ownership}%</b></div>
       <div className="player-stat desktop-stat"><span>高阶</span><b>{player.underlying}</b></div>
-      <div className="score"><span>指数</span><b>{player.score}</b></div>
+      <div className="score"><span>预计分</span><b>{player.score}</b></div>
     </article>
   );
 }
@@ -107,6 +107,7 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
 
 export function Dashboard({ data }: { data: DashboardData }) {
   const updated = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Shanghai" }).format(new Date(data.meta.updatedAt));
+  const captain = [...data.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
   return (
     <main>
       <header className="topbar">
@@ -136,7 +137,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
                   <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
                   <RichImage className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
                   <strong>{player.name}</strong><small>{player.team}</small>
-                  {player.id === data.startingSeven[0]?.id && <span className="lineup-captain" aria-label="队长">C</span>}
+                  {player.id === captain?.id && <span className="lineup-captain" aria-label="队长">C</span>}
                 </div>)}
               </div>)}
             </div>
