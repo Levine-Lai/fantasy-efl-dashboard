@@ -15,7 +15,7 @@ const [players, rounds] = await Promise.all([get("players.json"), get("rounds.js
 const positions = new Map(players.map((player) => [player.id, player.position]));
 const completed = rounds.filter((round) => round.status === "completed").sort((a, b) => a.id - b.id);
 const lives = await Promise.all(completed.map((round) => get(`live_scores/${round.id}.json`)));
-const keys = ["attackActions", "defenseActions", "returns", "cleanSheet", "other"];
+const keys = ["attackActions", "defenseActions", "goals", "assists", "cleanSheet", "other"];
 const result = Object.fromEntries(["GK", "DEF", "MID", "FWD"].map((position) => [position, { n: 0, oldAbs: 0, newAbs: 0, oldSquared: 0, newSquared: 0 }]));
 
 for (let testIndex = 3; testIndex < completed.length; testIndex++) {
