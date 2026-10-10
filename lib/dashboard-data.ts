@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 
 const API = "https://fantasy.efl.com/json/fantasy";
 type Position = "GK" | "DEF" | "MID" | "FWD";
-type RawPlayer = { id: number; squadId: number; competitionId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; totalPoints: number; injuryDetails?: string | null; suspensionDetails?: string | null };
+type RawPlayer = { id: number; squadId: number; competitionId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; appearances: number; totalPoints: number; goalsScored: number; injuryDetails?: string | null; suspensionDetails?: string | null };
 type RawSquad = { id: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[] };
 type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number };
 type RawRound = { id: number; name: string; status: string; games: RawGame[] };
@@ -13,7 +13,7 @@ type LiveSquad = { squadId: number; gameId: number; win: number; draw: number; a
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
 export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; score: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
-export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; perGame: Record<StatKey, number> };
+export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; xgPoints90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
 export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number; modelVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
@@ -26,6 +26,32 @@ async function getJson<T>(path: string): Promise<T> {
 
 function unescapeHtml(value: string) {
   return value.replaceAll("&amp;", "&").replaceAll("&quot;", '"').replaceAll("&#39;", "'").replaceAll("&apos;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
+}
+
+function matchKey(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+type XgRow = { player_name: string; team_name: string; apps: number; xg: number | null; minutes: number | null };
+async function getXgRows(season: string) {
+  const divisions = [[10, "championship"], [11, "league-one"], [12, "league-two"]] as const;
+  const results = await Promise.all(divisions.map(async ([competitionId, slug]) => {
+    const response = await fetch(`https://statz.ai/competitions/${slug}/xg/players`, { headers: { "user-agent": "Fantasy-EFL-Data-Board/1.0" } });
+    if (!response.ok) throw new Error(`Statz ${slug}: ${response.status}`);
+    const html = await response.text();
+    const encoded = html.match(/data-page="([^"]+)"/)?.[1];
+    if (!encoded) throw new Error(`Statz ${slug}: player data not found`);
+    const page = JSON.parse(encoded.replaceAll("&quot;", '"').replaceAll("&amp;", "&").replaceAll("&#039;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">")) as { props: { seasonLabel: string; players: XgRow[] } };
+    if (page.props.seasonLabel !== season || page.props.players.length < 100) throw new Error(`Statz ${slug}: unexpected season or incomplete player list`);
+    return page.props.players.map((row) => ({ ...row, competitionId }));
+  }));
+  const rows = new Map<string, { apps: number; xg: number; minutes: number }>();
+  for (const row of results.flat()) {
+    if (row.xg === null || row.minutes === null || row.minutes <= 0 || !Number.isFinite(row.xg)) continue;
+    const key = `${row.competitionId}:${matchKey(row.team_name)}:${matchKey(row.player_name)}`;
+    if (!rows.has(key)) rows.set(key, { apps: row.apps, xg: row.xg, minutes: row.minutes });
+  }
+  return rows;
 }
 
 async function getNews(): Promise<NewsItem[]> {
@@ -63,7 +89,12 @@ async function calculateDashboard(): Promise<DashboardData> {
   const activeRounds = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status)));
   const target = activeRounds.find((round) => round.status !== "completed") ?? activeRounds.at(-1)!;
   const completed = activeRounds.filter((round) => round.id < target.id && round.status === "completed");
-  const lives = await Promise.all(completed.map((round) => getJson<LiveRound>(`live_scores/${round.id}.json`)));
+  const targetDate = new Date(target.games[0].date);
+  const seasonStart = targetDate.getUTCFullYear() - (targetDate.getUTCMonth() < 6 ? 1 : 0);
+  const [lives, xgRows] = await Promise.all([
+    Promise.all(completed.map((round) => getJson<LiveRound>(`live_scores/${round.id}.json`))),
+    getXgRows(`${seasonStart}/${seasonStart + 1}`),
+  ]);
   const names = new Map(squads.map((squad) => [squad.id, squad.shortName || squad.name]));
   const squadsById = new Map(squads.map((squad) => [squad.id, squad]));
   const fixtures = new Map<number, string[]>();
@@ -127,7 +158,11 @@ async function calculateDashboard(): Promise<DashboardData> {
   const playerStats: PlayerStat[] = players.flatMap((player) => {
     const events = playerEventTotals.get(player.id);
     if (!events?.games) return [];
-    return [{ id: player.id, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
+    const fullName = `${player.firstName} ${player.lastName}`.trim();
+    const squad = squadsById.get(player.squadId);
+    const sourceXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
+    const xg = sourceXg?.apps === player.appearances ? sourceXg : undefined;
+    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, xgPoints90: xg ? Number((player.totalPoints * 90 / xg.minutes).toFixed(3)) : null, seasonGoals: xg ? player.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
   });
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
     const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
@@ -137,7 +172,7 @@ async function calculateDashboard(): Promise<DashboardData> {
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 3, modelVersion: 2 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 3, modelVersion: 3 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
@@ -154,6 +189,6 @@ export async function getDashboardData(): Promise<DashboardData> {
   const cached = await readCache();
   const age = cached ? Date.now() - new Date(cached.meta.updatedAt).getTime() : Number.POSITIVE_INFINITY;
   const hasRichImages = cached?.meta.portraitVersion === 3 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
-  if (cached && hasRichImages && cached.meta.modelVersion === 2 && age < 24 * 60 * 60 * 1000) return cached;
+  if (cached && hasRichImages && cached.meta.modelVersion === 3 && age < 24 * 60 * 60 * 1000) return cached;
   try { return await refreshDashboardData(); } catch (error) { if (cached) return cached; throw error; }
 }
