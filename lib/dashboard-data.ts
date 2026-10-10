@@ -12,7 +12,7 @@ type LivePlayer = { playerId: number; gameId: number; squadId: number } & Partia
 type LiveSquad = { squadId: number; gameId: number; win: number; draw: number; awayWin: number; cleanSheet: number; goalsScored: number };
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
-export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; score: number; matchup: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
+export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; expectedMinutes: number; score: number; matchup: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
 export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; xgPoints90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
@@ -146,7 +146,9 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const agg = playerAgg.get(player.id) ?? { games: 0, minutes: 0, sixty: 0, points: 0, goals: 0, assists: 0, saves: 0, cleanSheets: 0, clearances: 0, blocks: 0, tackles: 0, interceptions: 0, keyPasses: 0, shotsOnTarget: 0 };
     const clubGames = teamGames.get(player.squadId)?.size ?? 0;
     const reliability = clubGames ? agg.sixty / clubGames : 0;
-    const per90 = (value: number) => agg.minutes ? value * 90 / agg.minutes : 0;
+    // Keep a one-minute cameo with a few recorded actions from producing an
+    // absurd per-90 rate; three full matches are the minimum rate denominator.
+    const per90 = (value: number) => value * 90 / Math.max(agg.minutes, 270);
     let underlying = 0;
     if (player.position === "GK") underlying = per90(agg.saves) * 0.75 + per90(agg.cleanSheets) * 0.8;
     if (player.position === "DEF") underlying = per90(agg.clearances) * 0.18 + per90(agg.blocks) * 0.8 + per90(agg.tackles) * 0.45 + per90(agg.interceptions) * 0.45 + per90(agg.cleanSheets) * 0.7 + per90(agg.goals) * 1.8 + per90(agg.assists);
@@ -157,8 +159,12 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const expectedPerMatch = pointsPerGame * 0.8 + underlying * 0.2;
     // A one-appearance prior avoids treating tiny samples as certainty.
     const playingFactor = (agg.games + 1) / (clubGames + 2);
+    // Two 75-minute prior appearances temper noisy early-season averages; the
+    // resulting minute adjustment is deliberately capped to a small range.
+    const expectedMinutes = (agg.minutes + 150) / (agg.games + 2);
+    const minuteFactor = Math.max(0.94, Math.min(1.06, 1 + 0.15 * (expectedMinutes - 75) / 75));
     const matchups: number[] = [];
-    const scoreRaw = matches.reduce((total, match, index) => {
+    const scoreRaw = matches.reduce((total, match) => {
       const opponent = squadsById.get(match.opponentId);
       const row = opponent ? xgData.teamRows.get(`${player.competitionId}:${matchKey(opponent.name)}`) : undefined;
       const league = xgData.leagueAverages.get(player.competitionId);
@@ -173,11 +179,10 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
         : player.position === "MID" ? 0.15 + 0.10 * defenseFactor + 0.75 * attackFactor
         : 0.10 + 0.90 * attackFactor;
       matchups.push(matchupFactor);
-      const rotationFactor = index === 0 ? 1 : 0.85 + reliability * 0.15;
-      return total + expectedPerMatch * playingFactor * matchupFactor * rotationFactor;
+      return total + expectedPerMatch * playingFactor * minuteFactor * matchupFactor;
     }, 0);
     const available = player.status === "playing" && !player.injuryDetails && !player.suspensionDetails;
-    allPicks.push({ id: player.id, name: player.displayName, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures.length ? playerFixtures : ["本轮无剩余赛程"], reliability: Math.round(reliability * 100), score: available ? Number(scoreRaw.toFixed(1)) : 0, matchup: Number(((matchups.length ? matchups.reduce((sum, value) => sum + value, 0) / matchups.length : 1) * 100 - 100).toFixed(1)), underlying: Number(underlying.toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
+    allPicks.push({ id: player.id, name: player.displayName, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures.length ? playerFixtures : ["本轮无剩余赛程"], reliability: Math.round(reliability * 100), expectedMinutes: Math.round(expectedMinutes), score: available ? Number(scoreRaw.toFixed(1)) : 0, matchup: Number(((matchups.length ? matchups.reduce((sum, value) => sum + value, 0) / matchups.length : 1) * 100 - 100).toFixed(1)), underlying: Number(underlying.toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
   }
   allPicks.sort((a, b) => b.score - a.score || b.reliability - a.reliability);
   const picks = Object.fromEntries(["GK", "DEF", "MID", "FWD"].map((position) => [position, allPicks.filter((player) => player.position === position)])) as Record<Position, PlayerPick[]>;
@@ -199,7 +204,7 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 4 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 5 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
@@ -216,6 +221,6 @@ export async function getDashboardData(): Promise<DashboardData> {
   const cached = await readCache();
   const age = cached ? Date.now() - new Date(cached.meta.updatedAt).getTime() : Number.POSITIVE_INFINITY;
   const hasRichImages = cached?.meta.portraitVersion === 3 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
-  if (cached && hasRichImages && cached.meta.modelVersion === 4 && age < 24 * 60 * 60 * 1000) return cached;
+  if (cached && hasRichImages && cached.meta.modelVersion === 5 && age < 24 * 60 * 60 * 1000) return cached;
   try { return await refreshDashboardData(); } catch (error) { if (cached) return cached; throw error; }
 }
