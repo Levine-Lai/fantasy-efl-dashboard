@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Clock3, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { ChartScatter, Clock3, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DashboardData, PlayerPick, PlayerStat, StatKey } from "@/lib/dashboard-data";
 
 const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
+const competitionName: Record<number, string> = { 10: "英冠", 11: "英甲", 12: "英乙" };
 
 function labelFor(player: PlayerPick) {
   if (player.ownership <= 3) return "冷门";
@@ -105,6 +106,43 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
   );
 }
 
+function OpportunityChart({ players }: { players: PlayerStat[] }) {
+  const [competition, setCompetition] = useState("ALL");
+  const [position, setPosition] = useState("ATT");
+  const [hovered, setHovered] = useState<number | null>(null);
+  const dots = useMemo(() => players.flatMap((player) => {
+    const minutes = player.perGame.minutesPlayed * player.appearances;
+    if (minutes < 450 || player.position === "GK" || (competition !== "ALL" && player.competitionId !== Number(competition)) || (position === "ATT" && player.position === "DEF") || (position !== "ATT" && position !== "ALL" && player.position !== position)) return [];
+    const chance = (player.perGame.shotsOnTarget + player.perGame.keyPasses * 0.5) * 90 / player.perGame.minutesPlayed;
+    const points = player.perGame.points * 90 / player.perGame.minutesPlayed;
+    return [{ ...player, minutes, chance, points, returns: (player.perGame.goalsScored + player.perGame.assists) * 90 / player.perGame.minutesPlayed }];
+  }), [players, competition, position]);
+  const selected = dots.find((player) => player.id === hovered);
+  const maxX = Math.max(1, Math.ceil(Math.max(...dots.map((player) => player.chance), 1) * 2) / 2);
+  const maxY = Math.max(2, Math.ceil(Math.max(...dots.map((player) => player.points), 2) / 2) * 2);
+  const left = 66, top = 18, width = 668, height = 370;
+  const x = (value: number) => left + value / maxX * width;
+  const y = (value: number) => top + height - value / maxY * height;
+  const xMid = dots.length ? [...dots].sort((a, b) => a.chance - b.chance)[Math.floor(dots.length / 2)].chance : 0;
+  const yMid = dots.length ? [...dots].sort((a, b) => a.points - b.points)[Math.floor(dots.length / 2)].points : 0;
+  return <section className="panel opportunity-panel" id="chart">
+    <div className="section-heading"><div><ChartScatter size={18} /><h2>机会与得分</h2></div><span>{dots.length} 人</span></div>
+    <div className="chart-controls">
+      <label>级别<select value={competition} onChange={(event) => { setCompetition(event.target.value); setHovered(null); }}><option value="ALL">全部</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
+      <label>位置<select value={position} onChange={(event) => { setPosition(event.target.value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部非门将</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option></select></label>
+    </div>
+    <div className="chart-detail" aria-live="polite">{selected ? <><strong>{selected.fullName}</strong><span>{selected.team} · {competitionName[selected.competitionId]} · {selected.position} · {Math.round(selected.minutes)} 分钟</span><b>机会 {selected.chance.toFixed(2)} /90 · 得分 {selected.points.toFixed(2)} /90 · 进球+助攻 {selected.returns.toFixed(2)} /90</b></> : <><strong>悬停查看球员</strong><span>至少出场 450 分钟 · 点击圆点也可查看</span></>}</div>
+    <div className="chart-svg-wrap"><svg className="opportunity-svg" viewBox="0 0 760 440" role="img" aria-label="横轴进攻机会每90分钟，纵轴Fantasy得分每90分钟的球员散点图">
+      {[0, 0.25, 0.5, 0.75, 1].map((fraction) => <g key={`grid-${fraction}`}><line className="chart-grid" x1={left} x2={left + width} y1={y(maxY * fraction)} y2={y(maxY * fraction)} /><text className="chart-tick" x={left - 9} y={y(maxY * fraction) + 4} textAnchor="end">{(maxY * fraction).toFixed(1)}</text><line className="chart-grid" x1={x(maxX * fraction)} x2={x(maxX * fraction)} y1={top} y2={top + height} /><text className="chart-tick" x={x(maxX * fraction)} y={top + height + 20} textAnchor="middle">{(maxX * fraction).toFixed(1)}</text></g>)}
+      <line className="chart-midline" x1={x(xMid)} x2={x(xMid)} y1={top} y2={top + height} /><line className="chart-midline" x1={left} x2={left + width} y1={y(yMid)} y2={y(yMid)} />
+      <text className="chart-quadrant" x={left + 12} y={top + 20}>得分效率较高</text><text className="chart-quadrant" x={left + width - 12} y={top + height - 14} textAnchor="end">机会多 · 得分待兑现</text>
+      {dots.map((player) => <circle key={player.id} className={`chart-dot chart-dot-${player.position}${hovered === player.id ? " chart-dot-active" : ""}`} cx={x(player.chance)} cy={y(player.points)} r={hovered === player.id ? 8 : 5} tabIndex={0} role="button" aria-label={`${player.fullName}，机会每90分钟 ${player.chance.toFixed(2)}，得分每90分钟 ${player.points.toFixed(2)}`} onMouseEnter={() => setHovered(player.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(player.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(player.id)}><title>{player.fullName} · {player.team}</title></circle>)}
+      <text className="chart-axis-label" x={left + width / 2} y={432} textAnchor="middle">进攻机会 / 90</text><text className="chart-axis-label" x={18} y={top + height / 2} textAnchor="middle" transform={`rotate(-90 18 ${top + height / 2})`}>Fantasy 得分 / 90</text>
+    </svg></div>
+    <div className="chart-note">机会 = 射正 + 0.5 × 关键传球；这是官网数据构成的代理指标，不是 xGI。</div>
+  </section>;
+}
+
 export function Dashboard({ data }: { data: DashboardData }) {
   const updated = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Shanghai" }).format(new Date(data.meta.updatedAt));
   const captain = [...data.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
@@ -149,6 +187,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               </div>)}</div>
             </div>
           </div>
+          <OpportunityChart players={data.playerStats} />
         </section>
 
         <section className="panel recommendations" id="recommendations">
