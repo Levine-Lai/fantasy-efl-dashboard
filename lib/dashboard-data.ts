@@ -12,7 +12,7 @@ type LivePlayer = { playerId: number; gameId: number; squadId: number } & Partia
 type LiveSquad = { squadId: number; gameId: number; win: number; draw: number; awayWin: number; cleanSheet: number; goalsScored: number };
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
-export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; score: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
+export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; score: number; matchup: number; underlying: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
 export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; xgPoints90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
@@ -33,7 +33,8 @@ function matchKey(value: string) {
 }
 
 type XgRow = { player_name: string; team_name: string; apps: number; xg: number | null; minutes: number | null };
-export type XgSnapshot = { season: string; capturedAt: string; players: (XgRow & { competitionId: number })[] };
+type TeamXgRow = { competitionId: number; team_name: string; played: number; xg_per_game: number; xga_per_game: number };
+export type XgSnapshot = { season: string; capturedAt: string; players: (XgRow & { competitionId: number })[]; teams?: TeamXgRow[] };
 async function getXgRows(season: string, snapshot?: XgSnapshot) {
   const divisions = [[10, "championship"], [11, "league-one"], [12, "league-two"]] as const;
   const results = snapshot && snapshot.season === season && snapshot.players.length > 1000
@@ -54,7 +55,14 @@ async function getXgRows(season: string, snapshot?: XgSnapshot) {
     const key = `${row.competitionId}:${matchKey(row.team_name)}:${matchKey(row.player_name)}`;
     if (!rows.has(key)) rows.set(key, { apps: row.apps, xg: row.xg, minutes: row.minutes });
   }
-  return { rows, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
+  const teamRows = new Map<string, TeamXgRow>();
+  for (const row of snapshot?.teams ?? []) teamRows.set(`${row.competitionId}:${matchKey(row.team_name)}`, row);
+  const leagueAverages = new Map<number, { attack: number; defense: number }>();
+  for (const competitionId of [10, 11, 12]) {
+    const league = (snapshot?.teams ?? []).filter((row) => row.competitionId === competitionId && row.played > 0);
+    if (league.length) leagueAverages.set(competitionId, { attack: league.reduce((sum, row) => sum + row.xg_per_game, 0) / league.length, defense: league.reduce((sum, row) => sum + row.xga_per_game, 0) / league.length });
+  }
+  return { rows, teamRows, leagueAverages, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
 }
 
 async function getNews(): Promise<NewsItem[]> {
@@ -102,10 +110,13 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
   const names = new Map(squads.map((squad) => [squad.id, squad.shortName || squad.name]));
   const squadsById = new Map(squads.map((squad) => [squad.id, squad]));
   const fixtures = new Map<number, string[]>();
-  const validGames = target.games.filter((game) => !["postponed", "cancelled"].includes(game.status));
+  const fixtureDetails = new Map<number, { opponentId: number; home: boolean }[]>();
+  const validGames = target.games.filter((game) => !["postponed", "cancelled", "completed"].includes(game.status));
   for (const game of validGames) {
     const home = fixtures.get(game.homeId) ?? []; home.push(`主 ${names.get(game.awayId) ?? "—"}`); fixtures.set(game.homeId, home);
     const away = fixtures.get(game.awayId) ?? []; away.push(`客 ${names.get(game.homeId) ?? "—"}`); fixtures.set(game.awayId, away);
+    const homeDetails = fixtureDetails.get(game.homeId) ?? []; homeDetails.push({ opponentId: game.awayId, home: true }); fixtureDetails.set(game.homeId, homeDetails);
+    const awayDetails = fixtureDetails.get(game.awayId) ?? []; awayDetails.push({ opponentId: game.homeId, home: false }); fixtureDetails.set(game.awayId, awayDetails);
   }
 
   const teamGames = new Map<number, Set<number>>();
@@ -130,12 +141,11 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
 
   const allPicks: PlayerPick[] = [];
   for (const player of players) {
-    const playerFixtures = fixtures.get(player.squadId);
-    if (player.status !== "playing" || !playerFixtures || player.injuryDetails || player.suspensionDetails) continue;
+    const playerFixtures = fixtures.get(player.squadId) ?? [];
+    const matches = fixtureDetails.get(player.squadId) ?? [];
     const agg = playerAgg.get(player.id) ?? { games: 0, minutes: 0, sixty: 0, points: 0, goals: 0, assists: 0, saves: 0, cleanSheets: 0, clearances: 0, blocks: 0, tackles: 0, interceptions: 0, keyPasses: 0, shotsOnTarget: 0 };
     const clubGames = teamGames.get(player.squadId)?.size ?? 0;
     const reliability = clubGames ? agg.sixty / clubGames : 0;
-    if (clubGames >= 3 && reliability < 0.5) continue;
     const per90 = (value: number) => agg.minutes ? value * 90 / agg.minutes : 0;
     let underlying = 0;
     if (player.position === "GK") underlying = per90(agg.saves) * 0.75 + per90(agg.cleanSheets) * 0.8;
@@ -145,19 +155,32 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const pointsPerGame = agg.points / Math.max(1, agg.games);
     const squad = squadsById.get(player.squadId);
     const expectedPerMatch = pointsPerGame * 0.8 + underlying * 0.2;
-    const playingFactor = 0.5 + reliability * 0.5;
-    const scoreRaw = playerFixtures.reduce((total, fixture, index) => {
-      const difficulty = fixture.startsWith("主") ? squad?.fdrHome ?? 3 : squad?.fdrAway ?? 3;
-      const difficultyFactor = 1 + (3 - difficulty) * 0.06;
+    // A one-appearance prior avoids treating tiny samples as certainty.
+    const playingFactor = (agg.games + 1) / (clubGames + 2);
+    const matchups: number[] = [];
+    const scoreRaw = matches.reduce((total, match, index) => {
+      const opponent = squadsById.get(match.opponentId);
+      const row = opponent ? xgData.teamRows.get(`${player.competitionId}:${matchKey(opponent.name)}`) : undefined;
+      const league = xgData.leagueAverages.get(player.competitionId);
+      const evidence = row ? row.played / (row.played + 8) : 0;
+      const attackRatio = row && league ? row.xga_per_game / league.defense : 1;
+      const defenseRatio = row && league ? row.xg_per_game / league.attack : 1;
+      const clamp = (value: number) => Math.max(0.85, Math.min(1.15, value));
+      const attackFactor = clamp(1 + 0.35 * evidence * (attackRatio - 1));
+      const defenseFactor = clamp(1 - 0.35 * evidence * (defenseRatio - 1));
+      const matchupFactor = player.position === "GK" ? 0.45 + 0.55 * defenseFactor
+        : player.position === "DEF" ? 0.15 + 0.55 * defenseFactor + 0.30 * attackFactor
+        : player.position === "MID" ? 0.15 + 0.10 * defenseFactor + 0.75 * attackFactor
+        : 0.10 + 0.90 * attackFactor;
+      matchups.push(matchupFactor);
       const rotationFactor = index === 0 ? 1 : 0.85 + reliability * 0.15;
-      return total + expectedPerMatch * playingFactor * difficultyFactor * rotationFactor;
+      return total + expectedPerMatch * playingFactor * matchupFactor * rotationFactor;
     }, 0);
-    allPicks.push({ id: player.id, name: player.displayName, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures, reliability: Math.round(reliability * 100), score: Number(scoreRaw.toFixed(1)), underlying: Number(underlying.toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
+    const available = player.status === "playing" && !player.injuryDetails && !player.suspensionDetails;
+    allPicks.push({ id: player.id, name: player.displayName, fullName: `${player.firstName} ${player.lastName}`.trim(), team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures.length ? playerFixtures : ["本轮无剩余赛程"], reliability: Math.round(reliability * 100), score: available ? Number(scoreRaw.toFixed(1)) : 0, matchup: Number(((matchups.length ? matchups.reduce((sum, value) => sum + value, 0) / matchups.length : 1) * 100 - 100).toFixed(1)), underlying: Number(underlying.toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
   }
-  allPicks.sort((a, b) => b.score - a.score);
-  const picks = Object.fromEntries(["GK", "DEF", "MID", "FWD"].map((position) => [position, allPicks.filter((player) => player.position === position).slice(0, 5)])) as Record<Position, PlayerPick[]>;
-  const visiblePlayers = Object.values(picks).flat();
-  for (const player of visiblePlayers) player.avatarUrl = player.fallbackImage;
+  allPicks.sort((a, b) => b.score - a.score || b.reliability - a.reliability);
+  const picks = Object.fromEntries(["GK", "DEF", "MID", "FWD"].map((position) => [position, allPicks.filter((player) => player.position === position)])) as Record<Position, PlayerPick[]>;
   const startingSeven = [picks.FWD[0], picks.MID[0], picks.GK[0], ...picks.DEF.slice(0, 2), picks.MID[1], picks.FWD[1]].filter(Boolean);
   const playerStats: PlayerStat[] = players.flatMap((player) => {
     const events = playerEventTotals.get(player.id);
@@ -176,7 +199,7 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 3 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 4 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
@@ -193,6 +216,6 @@ export async function getDashboardData(): Promise<DashboardData> {
   const cached = await readCache();
   const age = cached ? Date.now() - new Date(cached.meta.updatedAt).getTime() : Number.POSITIVE_INFINITY;
   const hasRichImages = cached?.meta.portraitVersion === 3 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
-  if (cached && hasRichImages && cached.meta.modelVersion === 3 && age < 24 * 60 * 60 * 1000) return cached;
+  if (cached && hasRichImages && cached.meta.modelVersion === 4 && age < 24 * 60 * 60 * 1000) return cached;
   try { return await refreshDashboardData(); } catch (error) { if (cached) return cached; throw error; }
 }

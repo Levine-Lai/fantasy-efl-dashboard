@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChartScatter, Clock3, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DashboardData, PlayerPick, PlayerStat, StatKey } from "@/lib/dashboard-data";
 
@@ -13,10 +13,6 @@ function labelFor(player: PlayerPick) {
   if (player.ownership <= 3) return "冷门";
   if (player.ownership >= 10) return "热门";
   return "平衡";
-}
-
-function Metric({ label, value }: { label: string; value: string | number }) {
-  return <div className="metric"><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function RichImage({ src, fallback, alt, className }: { src: string; fallback?: string; alt: string; className: string }) {
@@ -37,7 +33,7 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
       </div>
       <div className="player-stat"><span>出勤</span><b>{player.reliability}%</b></div>
       <div className="player-stat ownership-stat"><span>持有</span><b>{player.ownership}%</b></div>
-      <div className="player-stat desktop-stat"><span>高阶</span><b>{player.underlying}</b></div>
+      <div className="player-stat desktop-stat"><span>对阵</span><b>{player.matchup > 0 ? "+" : ""}{player.matchup}%</b></div>
       <div className="score"><span>预计分</span><b>{player.score}</b></div>
     </article>
   );
@@ -163,27 +159,17 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
 }
 
 export function Dashboard({ data }: { data: DashboardData }) {
-  const updated = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Shanghai" }).format(new Date(data.meta.updatedAt));
+  const [playerQuery, setPlayerQuery] = useState("");
+  const searchResults = useMemo(() => Object.values(data.picks).flat().filter((player) => `${player.name} ${player.fullName} ${player.team}`.toLowerCase().includes(playerQuery.trim().toLowerCase())).sort((a, b) => b.score - a.score), [data.picks, playerQuery]);
   const captain = [...data.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><span className="brand-mark">FE</span><span>FANTASY EFL</span></a>
+        <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="https://fantasy.efl.com/apple-touch-icon.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a>
         <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
-        <div className="update-chip"><Clock3 size={15} />每日 08:00</div>
       </header>
 
       <div className="dashboard-shell" id="top">
-        <section className="round-strip">
-          <div><span className="eyebrow">NEXT ROUND</span><h1>{data.meta.roundName}</h1></div>
-          <div className="round-metrics">
-            <Metric label="有效比赛" value={data.meta.fixtureCount} />
-            <Metric label="双赛球队" value={data.meta.doubleTeams} />
-            <Metric label="样本轮次" value={data.meta.completedRounds} />
-            <Metric label="更新" value={updated} />
-          </div>
-        </section>
-
         <section className="lead-grid">
           <div className="panel selection-panel">
             <div className="section-heading"><div><Sparkles size={18} /><h2>本轮七人</h2></div><span>队长 {captain?.name} · {captain?.fixtures.length} 场 · 预计 {captain?.score} 分</span></div>
@@ -204,15 +190,17 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </section>
 
         <section className="panel recommendations" id="recommendations">
-          <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员候选池</h2></div><span>分钟 · 机会 · 防守 · 赛程</span></div>
-          <Tabs defaultValue="GK">
+          <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{data.meta.roundName} 球员预期得分</h2></div><span>对阵 · 分钟 · 双赛</span></div>
+          <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label><span>{playerQuery.trim() ? `${searchResults.length} 人` : "各位置前 10 人"}</span></div>
+          {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs defaultValue="GK">
             <TabsList className="position-tabs" aria-label="位置筛选">
               {positions.map((position) => <TabsTrigger key={position} value={position}>{positionName[position]}</TabsTrigger>)}
             </TabsList>
             {positions.map((position) => (
-              <TabsContent value={position} key={position}><div className="player-list">{data.picks[position].map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
+              <TabsContent value={position} key={position}><div className="player-list">{data.picks[position].slice(0, 10).map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
             ))}
-          </Tabs>
+          </Tabs>}
+          <details className="model-details"><summary>预期得分如何计算</summary><p>单场基础分 = 历史场均得分 × 80% + 位置高阶指标 / 90 分钟 × 20%。逐场乘以出场概率、对手攻防修正；双赛第二场另乘轮换系数，再将剩余场次相加。对阵修正使用 Statz 的球队 xG / 场和 xGA / 场，相对同级别均值计算，按已赛场次收缩，并限制在 ±15% 内；无匹配数据时保持中性。伤停或无剩余赛程记 0 分。</p></details>
         </section>
 
         <StatsTable players={data.playerStats} />
