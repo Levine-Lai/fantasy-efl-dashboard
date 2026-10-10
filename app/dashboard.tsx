@@ -29,7 +29,7 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
       </div>
       <div className="player-main">
         <div className="player-title"><strong>{player.name}</strong><span className={`pill pill-${labelFor(player)}`}>{labelFor(player)}</span></div>
-        <div className="player-meta"><span>{player.team}</span><span>{player.fixtures.join(" · ")}</span></div>
+        <div className="player-meta"><span>{player.team}</span><span>{player.fixtures.join(" · ")}</span><span>动作 {player.actionScore.toFixed(1)} / 场</span></div>
       </div>
       <div className="player-stat"><span>预计分钟</span><b>{player.expectedMinutes}′</b></div>
       <div className="player-stat ownership-stat"><span>持有</span><b>{player.ownership}%</b></div>
@@ -200,7 +200,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <TabsContent value={position} key={position}><div className="player-list">{data.picks[position].slice(0, 10).map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
             ))}
           </Tabs>}
-          <details className="model-details"><summary>预期得分如何计算</summary><p>单场基础分 = 历史场均得分 × 80% + 位置高阶指标 / 90 分钟 × 20%。逐场乘以出场概率、预计分钟微调和对手攻防修正；双赛两场直接相加，不另设第二场轮换折扣。预计分钟由历史出场时间与 75 分钟先验平滑得到，影响限制在 ±6%。对阵修正使用 Statz 的球队 xG / 场和 xGA / 场，相对同级别均值计算，按已赛场次收缩；无匹配数据时保持中性。伤停或无剩余赛程记 0 分。</p></details>
+          <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg" target="_blank" rel="noreferrer">Statz</a> 的对手 xGA 修正进攻动作和回报；对手 xG 对零封与防守动作分别作反向修正。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加；伤停或无剩余赛程记 0 分。</p></details>
         </section>
 
         <StatsTable players={data.playerStats} />
