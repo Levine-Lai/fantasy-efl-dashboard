@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/generate-pages-data.mjs && vite build --config pages.vite.config.ts"
+    "build": "node scripts/update-xg-snapshot.mjs && node scripts/generate-pages-data.mjs && vite build --config pages.vite.config.ts"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",

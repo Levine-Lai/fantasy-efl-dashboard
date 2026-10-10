@@ -106,7 +106,7 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
   );
 }
 
-function OpportunityChart({ players }: { players: PlayerStat[] }) {
+function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgUpdatedAt: string }) {
   const [competition, setCompetition] = useState("ALL");
   const [position, setPosition] = useState("ATT");
   const [hovered, setHovered] = useState<number | null>(null);
@@ -158,7 +158,7 @@ function OpportunityChart({ players }: { players: PlayerStat[] }) {
       {selected && <g className="chart-tooltip" transform={`translate(${tooltipX} ${tooltipY})`}><rect width={236} height={86} rx={9} /><text className="chart-tooltip-name" x={11} y={19}>{selected.fullName}</text><text x={11} y={37}>{selected.team} · {competitionName[selected.competitionId]} · {selected.position} · {Math.round(selected.minutes)} 分钟</text><text x={11} y={55}>xG/90 {selected.xg90.toFixed(2)} · 得分/90 {selected.points.toFixed(2)}</text><text x={11} y={73}>进球 {selected.goals.toFixed(0)} · 累计 xG {selected.xg?.toFixed(2)}</text></g>}
       <text className="chart-axis-label" x={left + width / 2} y={432} textAnchor="middle">xG / 90</text><text className="chart-axis-label" x={18} y={top + height / 2} textAnchor="middle" transform={`rotate(-90 18 ${top + height / 2})`}>Fantasy 得分 / 90</text>
     </svg></div>
-    <div className="chart-note">xG 来源：<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a>；得分来源：Fantasy EFL。仅显示赛季出场数一致且至少出场 450 分钟的球员。</div>
+    <div className="chart-note">xG 来源：<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a>（抓取于 {xgUpdatedAt ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(xgUpdatedAt)) : "—"}）；得分来源：Fantasy EFL。仅显示赛季出场数一致且至少出场 450 分钟的球员。</div>
   </section>;
 }
 
@@ -200,7 +200,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               </div>)}
             </div>
           </div>
-          <OpportunityChart players={data.playerStats} />
+          <OpportunityChart players={data.playerStats} xgUpdatedAt={data.meta.xgUpdatedAt} />
         </section>
 
         <section className="panel recommendations" id="recommendations">

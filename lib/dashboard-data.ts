@@ -16,7 +16,7 @@ export type PlayerPick = { id: number; name: string; fullName: string; team: str
 export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; xgPoints90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
 type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
-export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; portraitVersion?: number; modelVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
+export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API}/${path}`, { headers: { "user-agent": "Fantasy-EFL-Data-Board/1.0" } });
@@ -33,9 +33,12 @@ function matchKey(value: string) {
 }
 
 type XgRow = { player_name: string; team_name: string; apps: number; xg: number | null; minutes: number | null };
-async function getXgRows(season: string) {
+export type XgSnapshot = { season: string; capturedAt: string; players: (XgRow & { competitionId: number })[] };
+async function getXgRows(season: string, snapshot?: XgSnapshot) {
   const divisions = [[10, "championship"], [11, "league-one"], [12, "league-two"]] as const;
-  const results = await Promise.all(divisions.map(async ([competitionId, slug]) => {
+  const results = snapshot && snapshot.season === season && snapshot.players.length > 1000
+    ? snapshot.players
+    : (await Promise.all(divisions.map(async ([competitionId, slug]) => {
     const response = await fetch(`https://statz.ai/competitions/${slug}/xg/players`, { headers: { "user-agent": "Fantasy-EFL-Data-Board/1.0" } });
     if (!response.ok) throw new Error(`Statz ${slug}: ${response.status}`);
     const html = await response.text();
@@ -44,14 +47,14 @@ async function getXgRows(season: string) {
     const page = JSON.parse(encoded.replaceAll("&quot;", '"').replaceAll("&amp;", "&").replaceAll("&#039;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">")) as { props: { seasonLabel: string; players: XgRow[] } };
     if (page.props.seasonLabel !== season || page.props.players.length < 100) throw new Error(`Statz ${slug}: unexpected season or incomplete player list`);
     return page.props.players.map((row) => ({ ...row, competitionId }));
-  }));
+  }))).flat();
   const rows = new Map<string, { apps: number; xg: number; minutes: number }>();
-  for (const row of results.flat()) {
+  for (const row of results) {
     if (row.xg === null || row.minutes === null || row.minutes <= 0 || !Number.isFinite(row.xg)) continue;
     const key = `${row.competitionId}:${matchKey(row.team_name)}:${matchKey(row.player_name)}`;
     if (!rows.has(key)) rows.set(key, { apps: row.apps, xg: row.xg, minutes: row.minutes });
   }
-  return rows;
+  return { rows, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
 }
 
 async function getNews(): Promise<NewsItem[]> {
@@ -84,17 +87,18 @@ async function getNews(): Promise<NewsItem[]> {
   return items;
 }
 
-async function calculateDashboard(): Promise<DashboardData> {
+async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData> {
   const [players, squads, rounds] = await Promise.all([getJson<RawPlayer[]>("players.json"), getJson<RawSquad[]>("squads.json"), getJson<RawRound[]>("rounds.json")]);
   const activeRounds = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status)));
   const target = activeRounds.find((round) => round.status !== "completed") ?? activeRounds.at(-1)!;
   const completed = activeRounds.filter((round) => round.id < target.id && round.status === "completed");
   const targetDate = new Date(target.games[0].date);
   const seasonStart = targetDate.getUTCFullYear() - (targetDate.getUTCMonth() < 6 ? 1 : 0);
-  const [lives, xgRows] = await Promise.all([
+  const [lives, xgData] = await Promise.all([
     Promise.all(completed.map((round) => getJson<LiveRound>(`live_scores/${round.id}.json`))),
-    getXgRows(`${seasonStart}/${seasonStart + 1}`),
+    getXgRows(`${seasonStart}/${seasonStart + 1}`, snapshot),
   ]);
+  const xgRows = xgData.rows;
   const names = new Map(squads.map((squad) => [squad.id, squad.shortName || squad.name]));
   const squadsById = new Map(squads.map((squad) => [squad.id, squad]));
   const fixtures = new Map<number, string[]>();
@@ -172,7 +176,7 @@ async function calculateDashboard(): Promise<DashboardData> {
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), portraitVersion: 3, modelVersion: 3 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 3 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
