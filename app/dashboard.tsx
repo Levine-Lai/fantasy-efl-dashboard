@@ -114,7 +114,7 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
   const selected = dots.find((player) => player.id === hovered);
   const maxX = Math.max(0.5, Math.ceil(Math.max(...dots.map((player) => player.xg90), 0.5) * 4) / 4);
   const maxY = Math.max(2, Math.ceil(Math.max(...dots.map((player) => player.points), 2) / 2) * 2);
-  const left = 66, top = 18, width = 668, height = 370;
+  const left = 70, top = 20, width = 1140, height = 430;
   const x = (value: number) => left + value / maxX * width;
   const y = (value: number) => top + height - value / maxY * height;
   const xMid = dots.length ? [...dots].sort((a, b) => a.xg90 - b.xg90)[Math.floor(dots.length / 2)].xg90 : 0;
@@ -122,7 +122,7 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
   const point = (player: typeof dots[number]) => ({ x: x(player.xg90), y: y(player.points) });
   const labels: { id: number; name: string; x: number; y: number; box: { x: number; y: number; width: number; height: number } }[] = [];
   for (const player of [...dots].sort((a, b) => Math.abs((b.points - yMid) / maxY - (b.xg90 - xMid) / maxX) - Math.abs((a.points - yMid) / maxY - (a.xg90 - xMid) / maxX))) {
-    if (labels.length >= 8) break;
+    if (labels.length >= 28) break;
     const center = point(player);
     const labelWidth = Math.min(150, Math.max(54, player.fullName.length * 7));
     const placements = [
@@ -132,7 +132,7 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
     for (const box of placements.map(({ x: boxX, y: boxY }) => ({ x: boxX, y: boxY, width: labelWidth, height: 18 }))) {
       if (box.x < left || box.y < top || box.x + box.width > left + width || box.y + box.height > top + height) continue;
       if (labels.some((label) => box.x < label.box.x + label.box.width + 4 && box.x + box.width + 4 > label.box.x && box.y < label.box.y + label.box.height + 4 && box.y + box.height + 4 > label.box.y)) continue;
-      if (dots.some((other) => other.id !== player.id && Math.abs(point(other).x - center.x) > 7 && point(other).x > box.x - 4 && point(other).x < box.x + box.width + 4 && point(other).y > box.y - 4 && point(other).y < box.y + box.height + 4)) continue;
+      if (dots.some((other) => other.id !== player.id && point(other).x > box.x - 4 && point(other).x < box.x + box.width + 4 && point(other).y > box.y - 4 && point(other).y < box.y + box.height + 4)) continue;
       labels.push({ id: player.id, name: player.fullName, x: box.x, y: box.y + 13, box });
       break;
     }
@@ -140,19 +140,19 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
   const tooltipX = selected ? Math.min(left + width - 236, Math.max(left, x(selected.xg90) + 12)) : 0;
   const tooltipY = selected ? Math.min(top + height - 86, Math.max(top, y(selected.points) - 90)) : 0;
   return <section className="panel opportunity-panel" id="chart">
-    <div className="section-heading"><div><ChartScatter size={18} /><h2>xG 与得分</h2></div><span>{dots.length} 人</span></div>
+    <div className="section-heading"><div><ChartScatter size={18} /><h2>可视化表格</h2></div><span>xG / 90 × 得分 / 90 · {dots.length} 人</span></div>
     <div className="chart-controls">
       <label>级别<select value={competition} onChange={(event) => { setCompetition(event.target.value); setHovered(null); }}><option value="ALL">全部</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
       <label>位置<select value={position} onChange={(event) => { setPosition(event.target.value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部非门将</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option></select></label>
     </div>
-    <div className="chart-svg-wrap"><svg className="opportunity-svg" viewBox="0 0 760 440" role="img" aria-label="横轴预期进球xG每90分钟，纵轴Fantasy得分每90分钟的球员散点图">
+    <div className="chart-svg-wrap"><svg className="opportunity-svg" viewBox="0 0 1280 520" role="img" aria-label="横轴预期进球xG每90分钟，纵轴Fantasy得分每90分钟的球员散点图">
       {[0, 0.25, 0.5, 0.75, 1].map((fraction) => <g key={`grid-${fraction}`}><line className="chart-grid" x1={left} x2={left + width} y1={y(maxY * fraction)} y2={y(maxY * fraction)} /><text className="chart-tick" x={left - 9} y={y(maxY * fraction) + 4} textAnchor="end">{(maxY * fraction).toFixed(1)}</text><line className="chart-grid" x1={x(maxX * fraction)} x2={x(maxX * fraction)} y1={top} y2={top + height} /><text className="chart-tick" x={x(maxX * fraction)} y={top + height + 20} textAnchor="middle">{(maxX * fraction).toFixed(1)}</text></g>)}
       <line className="chart-midline" x1={x(xMid)} x2={x(xMid)} y1={top} y2={top + height} /><line className="chart-midline" x1={left} x2={left + width} y1={y(yMid)} y2={y(yMid)} />
       <text className="chart-quadrant" x={left + 12} y={top + 20}>得分高 · xG低</text><text className="chart-quadrant" x={left + width - 12} y={top + height - 14} textAnchor="end">xG高 · 得分待兑现</text>
       {dots.map((player) => <circle key={player.id} className={`chart-dot chart-dot-${player.position}${hovered === player.id ? " chart-dot-active" : ""}`} cx={x(player.xg90)} cy={y(player.points)} r={hovered === player.id ? 8 : 5} tabIndex={0} role="button" aria-label={`${player.fullName}，xG每90分钟 ${player.xg90.toFixed(2)}，得分每90分钟 ${player.points.toFixed(2)}`} onMouseEnter={() => setHovered(player.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(player.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(player.id)} />)}
       {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
       {selected && <g className="chart-tooltip" transform={`translate(${tooltipX} ${tooltipY})`}><rect width={236} height={86} rx={9} /><text className="chart-tooltip-name" x={11} y={19}>{selected.fullName}</text><text x={11} y={37}>{selected.team} · {competitionName[selected.competitionId]} · {selected.position} · {Math.round(selected.minutes)} 分钟</text><text x={11} y={55}>xG/90 {selected.xg90.toFixed(2)} · 得分/90 {selected.points.toFixed(2)}</text><text x={11} y={73}>进球 {selected.goals.toFixed(0)} · 累计 xG {selected.xg?.toFixed(2)}</text></g>}
-      <text className="chart-axis-label" x={left + width / 2} y={432} textAnchor="middle">xG / 90</text><text className="chart-axis-label" x={18} y={top + height / 2} textAnchor="middle" transform={`rotate(-90 18 ${top + height / 2})`}>Fantasy 得分 / 90</text>
+      <text className="chart-axis-label" x={left + width / 2} y={498} textAnchor="middle">xG / 90</text><text className="chart-axis-label" x={18} y={top + height / 2} textAnchor="middle" transform={`rotate(-90 18 ${top + height / 2})`}>Fantasy 得分 / 90</text>
     </svg></div>
     <div className="chart-note">xG 来源：<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a>（抓取于 {xgUpdatedAt ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(xgUpdatedAt)) : "—"}）；得分来源：Fantasy EFL。仅显示赛季出场数一致且至少出场 450 分钟的球员。</div>
   </section>;
@@ -172,7 +172,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
       <div className="dashboard-shell" id="top">
         <section className="lead-grid">
           <div className="panel selection-panel">
-            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮七人</h2></div><span>队长 {captain?.name} · {captain?.fixtures.length} 场 · 预计 {captain?.score} 分</span></div>
+            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮推荐阵容</h2></div><span>队长 {captain?.name} · {captain?.fixtures.length} 场 · 预计 {captain?.score} 分</span></div>
             <div className="lineup-pitch" aria-label="本轮七人阵型">
               {positions.map((position) => <div className="lineup-row" key={position}>
                 {data.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
@@ -186,10 +186,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               </div>)}
             </div>
           </div>
-          <OpportunityChart players={data.playerStats} xgUpdatedAt={data.meta.xgUpdatedAt} />
-        </section>
-
-        <section className="panel recommendations" id="recommendations">
+          <section className="panel recommendations" id="recommendations">
           <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{data.meta.roundName} 球员预期得分</h2></div><span>对阵 · 分钟 · 双赛</span></div>
           <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label><span>{playerQuery.trim() ? `${searchResults.length} 人` : "各位置前 10 人"}</span></div>
           {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs defaultValue="GK">
@@ -201,7 +198,10 @@ export function Dashboard({ data }: { data: DashboardData }) {
             ))}
           </Tabs>}
           <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg" target="_blank" rel="noreferrer">Statz</a> 的对手 xGA 修正进攻动作和回报；对手 xG 对零封与防守动作分别作反向修正。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加；伤停或无剩余赛程记 0 分。</p></details>
+          </section>
         </section>
+
+        <OpportunityChart players={data.playerStats} xgUpdatedAt={data.meta.xgUpdatedAt} />
 
         <StatsTable players={data.playerStats} />
 
