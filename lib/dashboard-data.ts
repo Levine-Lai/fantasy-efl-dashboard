@@ -5,7 +5,7 @@ type Position = "GK" | "DEF" | "MID" | "FWD";
 type RawPlayer = { id: number; squadId: number; competitionId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; appearances: number; totalPoints: number; goalsScored: number; injuryDetails?: string | null; suspensionDetails?: string | null };
 type RawSquad = { id: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[] };
 type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number };
-type RawRound = { id: number; name: string; status: string; games: RawGame[] };
+type RawRound = { id: number; name: string; status: string; lockoutDate: string; games: (RawGame & { isFinalized?: boolean })[] };
 export const statKeys = ["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "cleanSheet", "saves", "penaltySaves", "goalsConceded", "clearances", "blocks", "tackles", "interceptions", "yellowCards", "redCards", "ownGoals", "penaltyMisses", "hatTricks"] as const;
 export type StatKey = typeof statKeys[number];
 type LivePlayer = { playerId: number; gameId: number; squadId: number } & Partial<Record<StatKey, number>>;
@@ -43,11 +43,22 @@ export function blendXgGoalPoints(baseGoals: number, xg: number | null, xgMinute
   return baseGoals * (1 - weight) + xgGoalPoints * weight;
 }
 
-export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; reliability: number; expectedMinutes: number; score: number; matchup: number; actionScore: number; returnScore: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
-export type PlayerStat = { id: number; fullName: string; team: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; xgPoints90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
-type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; form: string[]; score: number };
+export type FixtureBadge = { label: string; opponent: string; opponentLogo: string };
+export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; fixtureBadges: FixtureBadge[]; reliability: number; expectedMinutes: number; score: number; matchup: number; actionScore: number; returnScore: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
+export type PlayerStat = { id: number; fullName: string; team: string; jerseyUrl: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; xgPoints90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
+export type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; fixtureBadges: FixtureBadge[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
-export type DashboardData = { meta: { roundId: number; roundName: string; fixtureCount: number; doubleTeams: number; completedRounds: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number }; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; playerStats: PlayerStat[]; teams: TeamPick[]; news: NewsItem[]; differentialCount: number };
+export type DashboardMeta = { roundId: number; roundName: string; lockoutAt: string; fixtureCount: number; doubleTeams: number; completedRounds: number; recentRoundName: string; recentFinalizedGames: number; recentTotalGames: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number };
+export type RoundRecommendations = { meta: DashboardMeta; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; teams: TeamPick[]; differentialCount: number };
+export type DashboardData = RoundRecommendations & { playerStats: PlayerStat[]; news: NewsItem[]; upcomingRound?: RoundRecommendations };
+
+export function selectRecommendationRounds(rounds: RawRound[], now = Date.now()) {
+  const active = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status))).sort((a, b) => Date.parse(a.lockoutDate) - Date.parse(b.lockoutDate));
+  const index = active.findIndex((round) => Date.parse(round.lockoutDate) > now);
+  const primary = active[index < 0 ? active.length - 1 : index];
+  const upcoming = index >= 0 ? active[index + 1] : undefined;
+  return { primary, upcoming };
+}
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API}/${path}`, { headers: { "user-agent": "Fantasy-EFL-Data-Board/1.0" } });
@@ -126,15 +137,22 @@ async function getNews(): Promise<NewsItem[]> {
   return items;
 }
 
-async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData> {
+async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number): Promise<DashboardData> {
   const [players, squads, rounds] = await Promise.all([getJson<RawPlayer[]>("players.json"), getJson<RawSquad[]>("squads.json"), getJson<RawRound[]>("rounds.json")]);
   const activeRounds = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status)));
-  const target = activeRounds.find((round) => round.status !== "completed") ?? activeRounds.at(-1)!;
+  const selected = selectRecommendationRounds(activeRounds);
+  const target = activeRounds.find((round) => round.id === targetRoundId) ?? selected.primary;
   const completed = activeRounds.filter((round) => round.id < target.id && round.status === "completed");
+  const earlier = activeRounds.filter((round) => round.id < target.id && round.games.some((game) => game.status === "completed" && game.isFinalized));
+  const recentRound = activeRounds.filter((round) => round.id < target.id).at(-1);
   const targetDate = new Date(target.games[0].date);
   const seasonStart = targetDate.getUTCFullYear() - (targetDate.getUTCMonth() < 6 ? 1 : 0);
   const [lives, xgData] = await Promise.all([
-    Promise.all(completed.map((round) => getJson<LiveRound>(`live_scores/${round.id}.json`))),
+    Promise.all(earlier.map(async (round) => {
+      const live = await getJson<LiveRound>(`live_scores/${round.id}.json`);
+      const finalized = new Set(round.games.filter((game) => game.status === "completed" && game.isFinalized).map((game) => game.id));
+      return { players: live.players.filter((row) => finalized.has(row.gameId)), squads: live.squads.filter((row) => finalized.has(row.gameId)) };
+    })),
     getXgRows(`${seasonStart}/${seasonStart + 1}`, snapshot),
   ]);
   const xgRows = xgData.rows;
@@ -149,6 +167,10 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const homeDetails = fixtureDetails.get(game.homeId) ?? []; homeDetails.push({ opponentId: game.awayId, home: true }); fixtureDetails.set(game.homeId, homeDetails);
     const awayDetails = fixtureDetails.get(game.awayId) ?? []; awayDetails.push({ opponentId: game.homeId, home: false }); fixtureDetails.set(game.awayId, awayDetails);
   }
+  const fixtureBadges = (squadId: number): FixtureBadge[] => (fixtureDetails.get(squadId) ?? []).map((match) => {
+    const opponent = squadsById.get(match.opponentId);
+    return { label: match.home ? "主" : "客", opponent: names.get(match.opponentId) ?? "—", opponentLogo: opponent?.lightBadge || opponent?.darkBadge || "" };
+  });
 
   const teamGames = new Map<number, Set<number>>();
   const teamAgg = new Map<number, { games: number; wins: number; draws: number; cleanSheets: number; goals: number }>();
@@ -227,7 +249,7 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
       return total + Math.max(0, matchupScore) * playingFactor * minuteFactor;
     }, 0);
     const available = player.status === "playing" && !player.injuryDetails && !player.suspensionDetails;
-    allPicks.push({ id: player.id, name: player.displayName, fullName, team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures.length ? playerFixtures : ["本轮无剩余赛程"], reliability: Math.round(reliability * 100), expectedMinutes: Math.round(expectedMinutes), score: available ? Number(scoreRaw.toFixed(1)) : 0, matchup: Number(((matchups.length ? matchups.reduce((sum, value) => sum + value, 0) / matchups.length : 1) * 100 - 100).toFixed(1)), actionScore: Number((expected.attackActions + expected.defenseActions).toFixed(1)), returnScore: Number((expectedGoals + expected.assists).toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
+    allPicks.push({ id: player.id, name: player.displayName, fullName, team: names.get(player.squadId) ?? "—", position: player.position, ownership: Number((player.percentSelected ?? 0).toFixed(1)), fixtures: playerFixtures.length ? playerFixtures : ["本轮无剩余赛程"], fixtureBadges: fixtureBadges(player.squadId), reliability: Math.round(reliability * 100), expectedMinutes: Math.round(expectedMinutes), score: available ? Number(scoreRaw.toFixed(1)) : 0, matchup: Number(((matchups.length ? matchups.reduce((sum, value) => sum + value, 0) / matchups.length : 1) * 100 - 100).toFixed(1)), actionScore: Number((expected.attackActions + expected.defenseActions).toFixed(1)), returnScore: Number((expectedGoals + expected.assists).toFixed(1)), points: agg.points, minutes: agg.minutes, avatarUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", fallbackImage: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "" });
   }
   allPicks.sort((a, b) => b.score - a.score || b.reliability - a.reliability);
   const picks = Object.fromEntries(["GK", "DEF", "MID", "FWD"].map((position) => [position, allPicks.filter((player) => player.position === position)])) as Record<Position, PlayerPick[]>;
@@ -239,7 +261,7 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const squad = squadsById.get(player.squadId);
     const sourceXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
     const xg = sourceXg?.apps === player.appearances ? sourceXg : undefined;
-    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, xgPoints90: xg ? Number((player.totalPoints * 90 / xg.minutes).toFixed(3)) : null, seasonGoals: xg ? player.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
+    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, xgPoints90: xg ? Number((events.totals.points * 90 / xg.minutes).toFixed(3)) : null, seasonGoals: xg ? player.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
   });
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
     const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
@@ -247,9 +269,9 @@ async function calculateDashboard(snapshot?: XgSnapshot): Promise<DashboardData>
     const homeGames = teamFixtures.filter((fixture) => fixture.startsWith("主")).length;
     const fdr = homeGames ? squad.fdrHome ?? 3 : squad.fdrAway ?? 3;
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
-    return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
+    return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
   }).sort((a, b) => b.score - a.score).slice(0, 5);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 7 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 8 }, picks, startingSeven, playerStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {
@@ -266,6 +288,6 @@ export async function getDashboardData(): Promise<DashboardData> {
   const cached = await readCache();
   const age = cached ? Date.now() - new Date(cached.meta.updatedAt).getTime() : Number.POSITIVE_INFINITY;
   const hasRichImages = cached?.meta.portraitVersion === 3 && Boolean(cached?.picks?.GK?.every((player) => player.avatarUrl && player.teamLogo));
-  if (cached && hasRichImages && cached.meta.modelVersion === 7 && age < 24 * 60 * 60 * 1000) return cached;
+  if (cached && hasRichImages && cached.meta.modelVersion === 8 && Date.parse(cached.meta.lockoutAt) > Date.now() && age < 4 * 60 * 60 * 1000) return cached;
   try { return await refreshDashboardData(); } catch (error) { if (cached) return cached; throw error; }
 }

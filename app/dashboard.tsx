@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DashboardData, PlayerPick, PlayerStat, StatKey } from "@/lib/dashboard-data";
+import type { DashboardData, FixtureBadge, PlayerPick, PlayerStat, StatKey } from "@/lib/dashboard-data";
 
 const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
@@ -17,6 +17,10 @@ function labelFor(player: PlayerPick) {
 
 function RichImage({ src, fallback, alt, className }: { src: string; fallback?: string; alt: string; className: string }) {
   return <img className={className} src={src || fallback} alt={alt} loading="lazy" onError={(event) => { if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback; else event.currentTarget.style.visibility = "hidden"; }} />;
+}
+
+function FixtureBadges({ fixtures }: { fixtures: FixtureBadge[] }) {
+  return <span className="fixture-badges">{fixtures.map((fixture, index) => <span className="fixture-badge" key={`${fixture.opponent}-${index}`} title={`${fixture.label} ${fixture.opponent}`}><span>{fixture.label}</span><RichImage className="fixture-logo" src={fixture.opponentLogo} alt={`${fixture.opponent} 队徽`} /><span>{fixture.opponent}</span></span>)}</span>;
 }
 
 function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
@@ -149,7 +153,12 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
       {[0, 0.25, 0.5, 0.75, 1].map((fraction) => <g key={`grid-${fraction}`}><line className="chart-grid" x1={left} x2={left + width} y1={y(maxY * fraction)} y2={y(maxY * fraction)} /><text className="chart-tick" x={left - 9} y={y(maxY * fraction) + 4} textAnchor="end">{(maxY * fraction).toFixed(1)}</text><line className="chart-grid" x1={x(maxX * fraction)} x2={x(maxX * fraction)} y1={top} y2={top + height} /><text className="chart-tick" x={x(maxX * fraction)} y={top + height + 20} textAnchor="middle">{(maxX * fraction).toFixed(1)}</text></g>)}
       <line className="chart-midline" x1={x(xMid)} x2={x(xMid)} y1={top} y2={top + height} /><line className="chart-midline" x1={left} x2={left + width} y1={y(yMid)} y2={y(yMid)} />
       <text className="chart-quadrant" x={left + 12} y={top + 20}>得分高 · xG低</text><text className="chart-quadrant" x={left + width - 12} y={top + height - 14} textAnchor="end">xG高 · 得分待兑现</text>
-      {dots.map((player) => <circle key={player.id} className={`chart-dot chart-dot-${player.position}${hovered === player.id ? " chart-dot-active" : ""}`} cx={x(player.xg90)} cy={y(player.points)} r={hovered === player.id ? 8 : 5} tabIndex={0} role="button" aria-label={`${player.fullName}，xG每90分钟 ${player.xg90.toFixed(2)}，得分每90分钟 ${player.points.toFixed(2)}`} onMouseEnter={() => setHovered(player.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(player.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(player.id)} />)}
+      <defs>{dots.filter((player) => player.jerseyUrl).map((player) => <clipPath id={`jersey-clip-${player.id}`} key={player.id}><circle cx={x(player.xg90)} cy={y(player.points)} r={9} /></clipPath>)}</defs>
+      {dots.map((player) => <g key={player.id} className={`chart-jersey-dot${hovered === player.id ? " chart-dot-active" : ""}`} tabIndex={0} role="button" aria-label={`${player.fullName}，xG每90分钟 ${player.xg90.toFixed(2)}，得分每90分钟 ${player.points.toFixed(2)}`} onMouseEnter={() => setHovered(player.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(player.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(player.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(player.id); } }}>
+        <circle className="chart-jersey-bg" cx={x(player.xg90)} cy={y(player.points)} r={10} />
+        {player.jerseyUrl && <image href={player.jerseyUrl} x={x(player.xg90) - 9} y={y(player.points) - 9} width={18} height={18} preserveAspectRatio="xMidYMid meet" clipPath={`url(#jersey-clip-${player.id})`} pointerEvents="none" />}
+        <circle className="chart-jersey-hit" cx={x(player.xg90)} cy={y(player.points)} r={13} />
+      </g>)}
       {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
       {selected && <g className="chart-tooltip" transform={`translate(${tooltipX} ${tooltipY})`}><rect width={236} height={86} rx={9} /><text className="chart-tooltip-name" x={11} y={19}>{selected.fullName}</text><text x={11} y={37}>{selected.team} · {competitionName[selected.competitionId]} · {selected.position} · {Math.round(selected.minutes)} 分钟</text><text x={11} y={55}>xG/90 {selected.xg90.toFixed(2)} · 得分/90 {selected.points.toFixed(2)}</text><text x={11} y={73}>进球 {selected.goals.toFixed(0)} · 累计 xG {selected.xg?.toFixed(2)}</text></g>}
       <text className="chart-axis-label" x={left + width / 2} y={498} textAnchor="middle">xG / 90</text><text className="chart-axis-label" x={18} y={top + height / 2} textAnchor="middle" transform={`rotate(-90 18 ${top + height / 2})`}>Fantasy 得分 / 90</text>
@@ -160,8 +169,12 @@ function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgU
 
 export function Dashboard({ data }: { data: DashboardData }) {
   const [playerQuery, setPlayerQuery] = useState("");
-  const searchResults = useMemo(() => Object.values(data.picks).flat().filter((player) => `${player.name} ${player.fullName} ${player.team}`.toLowerCase().includes(playerQuery.trim().toLowerCase())).sort((a, b) => b.score - a.score), [data.picks, playerQuery]);
-  const captain = [...data.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+  const active = data.upcomingRound && now >= Date.parse(data.upcomingRound.meta.lockoutAt) ? data.upcomingRound : data;
+  const searchResults = useMemo(() => Object.values(active.picks).flat().filter((player) => `${player.name} ${player.fullName} ${player.team}`.toLowerCase().includes(playerQuery.trim().toLowerCase())).sort((a, b) => b.score - a.score), [active.picks, playerQuery]);
+  const captain = [...active.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
+  const lockout = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(active.meta.lockoutAt));
   return (
     <main>
       <header className="topbar">
@@ -172,29 +185,32 @@ export function Dashboard({ data }: { data: DashboardData }) {
       <div className="dashboard-shell" id="top">
         <section className="lead-grid">
           <div className="panel selection-panel">
-            <div className="section-heading"><div><Sparkles size={18} /><h2>本轮推荐阵容</h2></div><span>队长 {captain?.name} · {captain?.fixtures.length} 场 · 预计 {captain?.score} 分</span></div>
-            <div className="lineup-pitch" aria-label="本轮七人阵型">
+            <div className="section-heading"><div><Sparkles size={18} /><h2>{active.meta.roundName} 推荐阵容</h2></div><span>截止 {lockout}</span></div>
+            <div className="lineup-pitch" aria-label={`${active.meta.roundName} 七人阵型`}>
               {positions.map((position) => <div className="lineup-row" key={position}>
-                {data.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
+                {active.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
                   <span className="lineup-position">{position}</span>
                   <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
                   <RichImage className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
                   <strong>{player.name}</strong><small>{player.team}</small>
-                  <span className="lineup-matches" title={player.fixtures.join(" · ")}>{player.fixtures.map((fixture, index) => <span key={`${fixture}-${index}`}>{fixture}</span>)}</span>
+                  <FixtureBadges fixtures={player.fixtureBadges} />
                   {player.id === captain?.id && <span className="lineup-captain" aria-label="队长">C</span>}
                 </div>)}
               </div>)}
             </div>
+            <div className="team-picks-heading"><Trophy size={16} /><strong>推荐球队</strong><span>选择 2 队</span></div>
+            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong><FixtureBadges fixtures={team.fixtureBadges} /></div><b>{team.score}</b></article>)}</div>
           </div>
           <section className="panel recommendations" id="recommendations">
-          <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{data.meta.roundName} 球员预期得分</h2></div><span>对阵 · 分钟 · 双赛</span></div>
+          <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{active.meta.roundName} 球员预期得分</h2></div><span>截止 {lockout}</span></div>
+          {!!active.meta.recentRoundName && <div className="round-data-status">已计入 {active.meta.recentRoundName} 已结算 {active.meta.recentFinalizedGames}/{active.meta.recentTotalGames} 场 · 未赛场次结束后更新预测</div>}
           <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label><span>{playerQuery.trim() ? `${searchResults.length} 人` : "各位置前 10 人"}</span></div>
           {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs defaultValue="GK">
             <TabsList className="position-tabs" aria-label="位置筛选">
               {positions.map((position) => <TabsTrigger key={position} value={position}>{positionName[position]}</TabsTrigger>)}
             </TabsList>
             {positions.map((position) => (
-              <TabsContent value={position} key={position}><div className="player-list">{data.picks[position].slice(0, 10).map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
+              <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(0, 10).map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
             ))}
           </Tabs>}
           <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
@@ -209,7 +225,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           <div className="panel" id="clubs">
             <div className="section-heading"><div><Trophy size={18} /><h2>球队选择</h2></div><span>前五</span></div>
             <div className="club-list">
-              {data.teams.map((team, index) => (
+              {active.teams.map((team, index) => (
                 <article className="club-row" key={team.id}>
                   <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.fixtures.join(" · ")}</small></div>
                   <div className="club-form">{team.form.map((item, i) => <i key={`${item}-${i}`}>{item}</i>)}</div><b>{team.score}</b>
