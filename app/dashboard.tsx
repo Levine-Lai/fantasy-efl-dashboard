@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DashboardData, FixtureBadge, PlayerPick, PlayerStat, StatKey } from "@/lib/dashboard-data";
+import type { DashboardData, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
 
 const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
@@ -106,64 +106,106 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
   );
 }
 
-function OpportunityChart({ players, xgUpdatedAt }: { players: PlayerStat[]; xgUpdatedAt: string }) {
-  const [competition, setCompetition] = useState("ALL");
+type AnalyticsDatum = { id: string; name: string; image: string; x: number; y: number; subtitle: string; detail: string };
+
+function chartDomain(values: number[], includeZero = false): [number, number] {
+  if (!values.length) return [0, 1];
+  const low = Math.min(...values), high = Math.max(...values);
+  const padding = Math.max(0.08, (high - low) * 0.14);
+  const minimum = includeZero ? 0 : Math.max(0, Math.floor((low - padding) * 10) / 10);
+  const maximum = Math.ceil((high + padding) * 10) / 10;
+  return [minimum, Math.max(minimum + 0.2, maximum)];
+}
+
+function OpportunityChart({ players, teams, xgUpdatedAt }: { players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string }) {
+  const [mode, setMode] = useState<"team" | "player">("team");
+  const [competition, setCompetition] = useState("10");
   const [position, setPosition] = useState("ATT");
-  const [hovered, setHovered] = useState<number | null>(null);
-  const dots = useMemo(() => players.flatMap((player) => {
-    const minutes = player.perGame.minutesPlayed * player.appearances;
-    if (minutes < 450 || player.xg90 == null || player.xgMinutes == null || player.xgMinutes < 450 || player.xgPoints90 == null || player.position === "GK" || (competition !== "ALL" && player.competitionId !== Number(competition)) || (position === "ATT" && player.position === "DEF") || (position !== "ATT" && position !== "ALL" && player.position !== position)) return [];
-    return [{ ...player, minutes: player.xgMinutes, xg90: player.xg90, points: player.xgPoints90, goals: player.seasonGoals ?? 0 }];
-  }), [players, competition, position]);
-  const selected = dots.find((player) => player.id === hovered);
-  const maxX = Math.max(0.5, Math.ceil(Math.max(...dots.map((player) => player.xg90), 0.5) * 4) / 4);
-  const maxY = Math.max(2, Math.ceil(Math.max(...dots.map((player) => player.points), 2) / 2) * 2);
-  const left = 70, top = 20, width = 1140, height = 430;
-  const x = (value: number) => left + value / maxX * width;
-  const y = (value: number) => top + height - value / maxY * height;
-  const xMid = dots.length ? [...dots].sort((a, b) => a.xg90 - b.xg90)[Math.floor(dots.length / 2)].xg90 : 0;
-  const yMid = dots.length ? [...dots].sort((a, b) => a.points - b.points)[Math.floor(dots.length / 2)].points : 0;
-  const point = (player: typeof dots[number]) => ({ x: x(player.xg90), y: y(player.points) });
-  const labels: { id: number; name: string; x: number; y: number; box: { x: number; y: number; width: number; height: number } }[] = [];
-  for (const player of [...dots].sort((a, b) => Math.abs((b.points - yMid) / maxY - (b.xg90 - xMid) / maxX) - Math.abs((a.points - yMid) / maxY - (a.xg90 - xMid) / maxX))) {
-    if (labels.length >= 28) break;
-    const center = point(player);
-    const labelWidth = Math.min(150, Math.max(54, player.fullName.length * 7));
-    const placements = [
-      { x: center.x + 10, y: center.y - 20 }, { x: center.x - labelWidth - 10, y: center.y - 20 },
-      { x: center.x + 10, y: center.y + 6 }, { x: center.x - labelWidth - 10, y: center.y + 6 },
+  const [minimum, setMinimum] = useState(450);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const dots = useMemo<AnalyticsDatum[]>(() => mode === "team"
+    ? teams.filter((team) => competition === "ALL" || team.competitionId === Number(competition)).map((team) => ({
+      id: "team-" + team.id, name: team.name, image: team.logo, x: team.xgPerGame, y: team.xgaPerGame,
+      subtitle: competitionName[team.competitionId] + " · " + team.played + " 场",
+      detail: "xG/场 " + team.xgPerGame.toFixed(2) + " · xGA/场 " + team.xgaPerGame.toFixed(2),
+    }))
+    : players.filter((player) => player.position !== "GK" && player.xg90 != null && player.goals90 != null && player.xgMinutes != null && player.xgMinutes >= minimum && (competition === "ALL" || player.competitionId === Number(competition)) && (position === "ALL" || position === "ATT" && player.position !== "DEF" || player.position === position)).map((player) => ({
+      id: "player-" + player.id, name: player.fullName, image: player.jerseyUrl, x: player.xg90!, y: player.goals90!,
+      subtitle: player.team + " · " + competitionName[player.competitionId] + " · " + Math.round(player.xgMinutes!) + " 分钟",
+      detail: "xG/90 " + player.xg90!.toFixed(2) + " · 进球/90 " + player.goals90!.toFixed(2) + " · 进球 " + (player.seasonGoals ?? 0),
+    })), [mode, teams, players, competition, position, minimum]);
+  const selected = dots.find((datum) => datum.id === hovered);
+  const playerMaximum = Math.max(0.5, Math.ceil(Math.max(...dots.flatMap((datum) => [datum.x, datum.y]), 0) * 10) / 10);
+  const xDomain: [number, number] = mode === "player" ? [0, playerMaximum] : chartDomain(dots.map((datum) => datum.x));
+  const yDomain: [number, number] = mode === "player" ? [0, playerMaximum] : chartDomain(dots.map((datum) => datum.y));
+  const left = 76, top = 52, size = 686, right = left + size, bottom = top + size;
+  const x = (value: number) => left + (value - xDomain[0]) / (xDomain[1] - xDomain[0]) * size;
+  const y = (value: number) => mode === "team"
+    ? top + (value - yDomain[0]) / (yDomain[1] - yDomain[0]) * size
+    : bottom - (value - yDomain[0]) / (yDomain[1] - yDomain[0]) * size;
+  const labels: { id: string; name: string; x: number; y: number; box: { x: number; y: number; width: number; height: number } }[] = [];
+  const priority = [...dots].sort((a, b) => mode === "team" ? (b.x - b.y) - (a.x - a.y) : (b.x + b.y) - (a.x + a.y));
+  for (const datum of priority) {
+    if (labels.length >= (mode === "team" ? 35 : 28)) break;
+    const px = x(datum.x), py = y(datum.y);
+    const labelWidth = Math.min(170, Math.max(48, datum.name.length * 7));
+    const candidates = [
+      { x: px + 17, y: py - 19 }, { x: px - labelWidth - 17, y: py - 19 },
+      { x: px + 17, y: py + 5 }, { x: px - labelWidth - 17, y: py + 5 },
     ];
-    for (const box of placements.map(({ x: boxX, y: boxY }) => ({ x: boxX, y: boxY, width: labelWidth, height: 18 }))) {
-      if (box.x < left || box.y < top || box.x + box.width > left + width || box.y + box.height > top + height) continue;
-      if (labels.some((label) => box.x < label.box.x + label.box.width + 4 && box.x + box.width + 4 > label.box.x && box.y < label.box.y + label.box.height + 4 && box.y + box.height + 4 > label.box.y)) continue;
-      if (dots.some((other) => other.id !== player.id && point(other).x > box.x - 4 && point(other).x < box.x + box.width + 4 && point(other).y > box.y - 4 && point(other).y < box.y + box.height + 4)) continue;
-      labels.push({ id: player.id, name: player.fullName, x: box.x, y: box.y + 13, box });
+    for (const box of candidates.map((candidate) => ({ ...candidate, width: labelWidth, height: 18 }))) {
+      if (box.x < left || box.y < top || box.x + box.width > right || box.y + box.height > bottom) continue;
+      if (labels.some((label) => box.x < label.box.x + label.box.width + 5 && box.x + box.width + 5 > label.box.x && box.y < label.box.y + label.box.height + 5 && box.y + box.height + 5 > label.box.y)) continue;
+      if (dots.some((other) => other.id !== datum.id && x(other.x) > box.x - 14 && x(other.x) < box.x + box.width + 14 && y(other.y) > box.y - 14 && y(other.y) < box.y + box.height + 14)) continue;
+      labels.push({ id: datum.id, name: datum.name, x: box.x, y: box.y + 13, box });
       break;
     }
   }
-  const tooltipX = selected ? Math.min(left + width - 236, Math.max(left, x(selected.xg90) + 12)) : 0;
-  const tooltipY = selected ? Math.min(top + height - 86, Math.max(top, y(selected.points) - 90)) : 0;
+  const tooltipX = selected ? Math.min(right - 282, Math.max(left, x(selected.x) + 18)) : 0;
+  const tooltipY = selected ? Math.min(bottom - 88, Math.max(top, y(selected.y) - 94)) : 0;
+  const statzCompetition = competition === "11" ? "league-one" : competition === "12" ? "league-two" : "championship";
+  const statzUrl = `https://statz.ai/competitions/${statzCompetition}/xg${mode === "player" ? "/players" : ""}`;
+  const changeMode = (value: "team" | "player") => { setMode(value); setHovered(null); };
   return <section className="panel opportunity-panel" id="chart">
-    <div className="section-heading"><div><ChartScatter size={18} /><h2>可视化表格</h2></div><span>xG / 90 × 得分 / 90 · {dots.length} 人</span></div>
-    <div className="chart-controls">
-      <label>级别<select value={competition} onChange={(event) => { setCompetition(event.target.value); setHovered(null); }}><option value="ALL">全部</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
-      <label>位置<select value={position} onChange={(event) => { setPosition(event.target.value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部非门将</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option></select></label>
+    <div className="analytics-layout">
+      <aside className="analytics-sidebar">
+        <div className="section-heading"><div><ChartScatter size={18} /><h2>可视化表格</h2></div></div>
+        <div className="analytics-switch" role="group" aria-label="图表对象">
+          <button type="button" onClick={() => changeMode("team")} disabled={mode === "team"} aria-label="切换到球队">‹</button>
+          <strong>{mode === "team" ? "球队" : "球员"}</strong>
+          <button type="button" onClick={() => changeMode("player")} disabled={mode === "player"} aria-label="切换到球员">›</button>
+        </div>
+        <div className="analytics-metric"><span>横轴</span><strong>{mode === "team" ? "进攻指数 · xG / 场" : "预期进球 · xG / 90"}</strong></div>
+        <div className="analytics-metric"><span>纵轴</span><strong>{mode === "team" ? "防守指数 · xGA / 场" : "实际进球 / 90"}</strong></div>
+        <div className="chart-controls">
+          <label>联赛级别<select value={competition} onChange={(event) => { setCompetition(event.target.value); setHovered(null); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
+          {mode === "player" && <><label>位置<select value={position} onChange={(event) => { setPosition(event.target.value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部非门将</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option></select></label><label>至少出场<select value={minimum} onChange={(event) => { setMinimum(Number(event.target.value)); setHovered(null); }}><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></select></label></>}
+        </div>
+        <div className="analytics-count">{dots.length} {mode === "team" ? "支球队" : "名球员"}</div>
+        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz</a>{mode === "player" ? " · 实际进球：Fantasy EFL" : ""}<br />更新：{xgUpdatedAt ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(xgUpdatedAt)) : "—"}</p>
+      </aside>
+      <div className="analytics-visual">
+        <div className="analytics-visual-heading"><strong>{mode === "team" ? "球队进攻 × 防守" : "球员 xG × 实际进球"}</strong><span>{mode === "team" ? "右上：攻强守强" : "虚线：实际进球 = xG"}</span></div>
+        <div className="chart-svg-wrap"><svg className="opportunity-svg" viewBox="0 0 820 820" role="img" aria-label={mode === "team" ? "横轴球队场均xG越右越强，纵轴场均xGA越上越低、防守越强" : "横轴球员每90分钟xG，纵轴每90分钟实际进球"}>
+          {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+            const xv = xDomain[0] + fraction * (xDomain[1] - xDomain[0]);
+            const yv = yDomain[0] + fraction * (yDomain[1] - yDomain[0]);
+            return <g key={fraction}><line className="chart-grid" x1={x(xv)} x2={x(xv)} y1={top} y2={bottom} /><line className="chart-grid" x1={left} x2={right} y1={y(yv)} y2={y(yv)} /><text className="chart-tick" x={x(xv)} y={bottom + 24} textAnchor="middle">{xv.toFixed(1)}</text><text className="chart-tick" x={left - 12} y={y(yv) + 4} textAnchor="end">{yv.toFixed(1)}</text></g>;
+          })}
+          {mode === "team" ? <><line className="chart-midline" x1={x((xDomain[0] + xDomain[1]) / 2)} x2={x((xDomain[0] + xDomain[1]) / 2)} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y((yDomain[0] + yDomain[1]) / 2)} y2={y((yDomain[0] + yDomain[1]) / 2)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">攻强 · 守强</text></> : <><line className="chart-midline" x1={x(0)} y1={y(0)} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
+          <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={11} /></clipPath>)}</defs>
+          {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + (hovered === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(datum.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(datum.id); } }}>
+            <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={12} />
+            {datum.image && <image href={datum.image} x={x(datum.x) - 11} y={y(datum.y) - 11} width={22} height={22} preserveAspectRatio="xMidYMid meet" clipPath={"url(#analytics-clip-" + datum.id + ")"} pointerEvents="none" />}
+            <circle className="chart-jersey-hit" cx={x(datum.x)} cy={y(datum.y)} r={16} />
+          </g>)}
+          {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
+          {selected && <g className="chart-tooltip" transform={"translate(" + tooltipX + " " + tooltipY + ")"}><rect width={282} height={88} rx={9} /><text className="chart-tooltip-name" x={11} y={22}>{selected.name}</text><text x={11} y={43}>{selected.subtitle}</text><text x={11} y={65}>{selected.detail}</text></g>}
+          <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{mode === "team" ? "进攻指数 · xG / 场 →" : "预期进球 · xG / 90 →"}</text>
+          <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{mode === "team" ? "防守指数 · xGA / 场（越上越好）" : "实际进球 / 90 ↑"}</text>
+        </svg></div>
+      </div>
     </div>
-    <div className="chart-svg-wrap"><svg className="opportunity-svg" viewBox="0 0 1280 520" role="img" aria-label="横轴预期进球xG每90分钟，纵轴Fantasy得分每90分钟的球员散点图">
-      {[0, 0.25, 0.5, 0.75, 1].map((fraction) => <g key={`grid-${fraction}`}><line className="chart-grid" x1={left} x2={left + width} y1={y(maxY * fraction)} y2={y(maxY * fraction)} /><text className="chart-tick" x={left - 9} y={y(maxY * fraction) + 4} textAnchor="end">{(maxY * fraction).toFixed(1)}</text><line className="chart-grid" x1={x(maxX * fraction)} x2={x(maxX * fraction)} y1={top} y2={top + height} /><text className="chart-tick" x={x(maxX * fraction)} y={top + height + 20} textAnchor="middle">{(maxX * fraction).toFixed(1)}</text></g>)}
-      <line className="chart-midline" x1={x(xMid)} x2={x(xMid)} y1={top} y2={top + height} /><line className="chart-midline" x1={left} x2={left + width} y1={y(yMid)} y2={y(yMid)} />
-      <text className="chart-quadrant" x={left + 12} y={top + 20}>得分高 · xG低</text><text className="chart-quadrant" x={left + width - 12} y={top + height - 14} textAnchor="end">xG高 · 得分待兑现</text>
-      <defs>{dots.filter((player) => player.jerseyUrl).map((player) => <clipPath id={`jersey-clip-${player.id}`} key={player.id}><circle cx={x(player.xg90)} cy={y(player.points)} r={9} /></clipPath>)}</defs>
-      {dots.map((player) => <g key={player.id} className={`chart-jersey-dot${hovered === player.id ? " chart-dot-active" : ""}`} tabIndex={0} role="button" aria-label={`${player.fullName}，xG每90分钟 ${player.xg90.toFixed(2)}，得分每90分钟 ${player.points.toFixed(2)}`} onMouseEnter={() => setHovered(player.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(player.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(player.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(player.id); } }}>
-        <circle className="chart-jersey-bg" cx={x(player.xg90)} cy={y(player.points)} r={10} />
-        {player.jerseyUrl && <image href={player.jerseyUrl} x={x(player.xg90) - 9} y={y(player.points) - 9} width={18} height={18} preserveAspectRatio="xMidYMid meet" clipPath={`url(#jersey-clip-${player.id})`} pointerEvents="none" />}
-        <circle className="chart-jersey-hit" cx={x(player.xg90)} cy={y(player.points)} r={13} />
-      </g>)}
-      {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
-      {selected && <g className="chart-tooltip" transform={`translate(${tooltipX} ${tooltipY})`}><rect width={236} height={86} rx={9} /><text className="chart-tooltip-name" x={11} y={19}>{selected.fullName}</text><text x={11} y={37}>{selected.team} · {competitionName[selected.competitionId]} · {selected.position} · {Math.round(selected.minutes)} 分钟</text><text x={11} y={55}>xG/90 {selected.xg90.toFixed(2)} · 得分/90 {selected.points.toFixed(2)}</text><text x={11} y={73}>进球 {selected.goals.toFixed(0)} · 累计 xG {selected.xg?.toFixed(2)}</text></g>}
-      <text className="chart-axis-label" x={left + width / 2} y={498} textAnchor="middle">xG / 90</text><text className="chart-axis-label" x={18} y={top + height / 2} textAnchor="middle" transform={`rotate(-90 18 ${top + height / 2})`}>Fantasy 得分 / 90</text>
-    </svg></div>
-    <div className="chart-note">xG 来源：<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a>（抓取于 {xgUpdatedAt ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(xgUpdatedAt)) : "—"}）；得分来源：Fantasy EFL。仅显示赛季出场数一致且至少出场 450 分钟的球员。</div>
   </section>;
 }
 
@@ -217,7 +259,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           </section>
         </section>
 
-        <OpportunityChart players={data.playerStats} xgUpdatedAt={data.meta.xgUpdatedAt} />
+        <OpportunityChart players={data.playerStats} teams={data.teamStats} xgUpdatedAt={data.meta.xgUpdatedAt} />
 
         <StatsTable players={data.playerStats} />
 

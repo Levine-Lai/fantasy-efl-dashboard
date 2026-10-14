@@ -85,12 +85,27 @@ a { color: inherit; text-decoration: none; }
 .team-pick-main > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .team-pick .fixture-badges { justify-content: flex-start; }
 .team-pick > b { justify-self: end; color: var(--prussian); font-size: 14px; }
-.opportunity-panel { min-width: 0; margin-top: 18px; padding: 20px; }
-.chart-controls { display: flex; flex-wrap: wrap; gap: 12px; }
-.chart-controls label { display: flex; align-items: center; gap: 7px; color: var(--prussian); font-size: 12px; font-weight: 700; }
-.chart-controls select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink); background: var(--white); font: inherit; }
+.opportunity-panel { min-width: 0; margin-top: 18px; overflow: hidden; }
+.analytics-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); align-items: stretch; }
+.analytics-sidebar { display: flex; flex-direction: column; gap: 20px; min-width: 0; padding: 24px 20px; border-right: 1px solid var(--border); background: var(--ice); }
+.analytics-sidebar .section-heading { margin-bottom: 3px; }
+.analytics-switch { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; align-items: center; gap: 6px; min-height: 48px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); text-align: center; }
+.analytics-switch button { height: 36px; margin: 5px; border: 0; border-radius: 7px; color: var(--navy); background: var(--ice); cursor: pointer; font-size: 25px; line-height: 1; }
+.analytics-switch button:disabled { opacity: .35; cursor: default; }
+.analytics-switch strong { color: var(--prussian); font-size: 16px; }
+.analytics-metric { display: grid; gap: 5px; padding: 10px 12px; border-left: 3px solid var(--prussian); background: var(--white); }
+.analytics-metric span { color: var(--prussian); font-size: 11px; }
+.analytics-metric strong { font-size: 13px; line-height: 1.4; }
+.chart-controls { display: grid; gap: 14px; }
+.chart-controls label { display: grid; gap: 6px; color: var(--prussian); font-size: 12px; font-weight: 700; }
+.chart-controls select { width: 100%; min-height: 38px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink); background: var(--white); font: inherit; }
+.analytics-count { padding-top: 10px; border-top: 1px solid var(--border); color: var(--prussian); font-size: 12px; font-weight: 750; }
+.analytics-visual { min-width: 0; padding: 24px; }
+.analytics-visual-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--prussian); }
+.analytics-visual-heading strong { font-size: 16px; }
+.analytics-visual-heading span { font-size: 11px; }
 .chart-svg-wrap { width: 100%; overflow: hidden; }
-.opportunity-svg { display: block; width: 100%; height: auto; margin: 8px auto 0; overflow: visible; }
+.opportunity-svg { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; margin: 10px auto 0; overflow: visible; }
 .chart-grid { stroke: var(--border); stroke-width: 1; }
 .chart-midline { stroke: var(--prussian); stroke-width: 1.2; stroke-dasharray: 5 5; opacity: .5; }
 .chart-tick, .chart-axis-label { fill: var(--prussian); font-size: 12px; }
@@ -109,7 +124,7 @@ a { color: inherit; text-decoration: none; }
 .chart-jersey-bg { fill: var(--white); stroke: var(--prussian); stroke-width: 1.5px; }
 .chart-jersey-hit { fill: transparent; stroke: transparent; }
 .chart-jersey-dot:hover .chart-jersey-bg, .chart-jersey-dot:focus-visible .chart-jersey-bg, .chart-jersey-dot.chart-dot-active .chart-jersey-bg { stroke: var(--navy); stroke-width: 3px; }
-.chart-note { margin-top: 8px; color: var(--prussian); font-size: 11px; line-height: 1.5; }
+.chart-note { margin-top: auto; color: var(--prussian); font-size: 11px; line-height: 1.6; }
 
 .recommendations { min-width: 0; overflow: hidden; }
 .wide-heading { margin: 0; padding: 20px 20px 12px; }
@@ -211,8 +226,12 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .ownership-stat, .desktop-stat { display: none; }
   .player-meta { flex-direction: column; gap: 2px; }
   .club-form { display: none; }
+  .analytics-layout { grid-template-columns: 1fr; }
+  .analytics-sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+  .analytics-sidebar .chart-controls { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+  .analytics-visual { padding: 18px; }
   .chart-svg-wrap { overflow-x: auto; }
-  .opportunity-svg { min-width: 1100px; }
+  .opportunity-svg { min-width: 580px; }
 }
 
 @media (max-width: 430px) {
