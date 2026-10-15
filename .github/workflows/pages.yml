@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: node scripts/test-round-selection.mjs
       - run: npm run build
+      - run: node scripts/test-chart-data.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
           path: pages-dist

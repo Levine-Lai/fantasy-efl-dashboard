@@ -75,6 +75,11 @@ function matchKey(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+export function abbreviatedPlayerKey(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? matchKey(parts[0][0] + parts.slice(1).join("")) : "";
+}
+
 type XgRow = { player_name: string; team_name: string; apps: number; xg: number | null; minutes: number | null };
 type TeamXgRow = { competitionId: number; team_name: string; played: number; xg_per_game: number; xga_per_game: number; xgd?: number; xpts?: number; points_delta?: number; goals_for?: number; xg?: number };
 export type XgSnapshot = { season: string; capturedAt: string; players: (XgRow & { competitionId: number })[]; teams?: TeamXgRow[] };
@@ -93,10 +98,16 @@ async function getXgRows(season: string, snapshot?: XgSnapshot) {
     return page.props.players.map((row) => ({ ...row, competitionId }));
   }))).flat();
   const rows = new Map<string, { apps: number; xg: number; minutes: number }>();
+  const aliases = new Map<string, { apps: number; xg: number; minutes: number } | null>();
   for (const row of results) {
     if (row.xg === null || row.minutes === null || row.minutes <= 0 || !Number.isFinite(row.xg)) continue;
     const key = `${row.competitionId}:${matchKey(row.team_name)}:${matchKey(row.player_name)}`;
     if (!rows.has(key)) rows.set(key, { apps: row.apps, xg: row.xg, minutes: row.minutes });
+    const abbreviated = abbreviatedPlayerKey(row.player_name);
+    if (abbreviated) {
+      const alias = `${row.competitionId}:${matchKey(row.team_name)}:${abbreviated}`;
+      aliases.set(alias, aliases.has(alias) ? null : { apps: row.apps, xg: row.xg, minutes: row.minutes });
+    }
   }
   const teamRows = new Map<string, TeamXgRow>();
   for (const row of snapshot?.teams ?? []) teamRows.set(`${row.competitionId}:${matchKey(row.team_name)}`, row);
@@ -105,7 +116,7 @@ async function getXgRows(season: string, snapshot?: XgSnapshot) {
     const league = (snapshot?.teams ?? []).filter((row) => row.competitionId === competitionId && row.played > 0);
     if (league.length) leagueAverages.set(competitionId, { attack: league.reduce((sum, row) => sum + row.xg_per_game, 0) / league.length, defense: league.reduce((sum, row) => sum + row.xga_per_game, 0) / league.length });
   }
-  return { rows, teamRows, leagueAverages, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
+  return { rows, aliases, teamRows, leagueAverages, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
 }
 
 async function getNews(): Promise<NewsItem[]> {
@@ -260,8 +271,12 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     if (!events?.games) return [];
     const fullName = `${player.firstName} ${player.lastName}`.trim();
     const squad = squadsById.get(player.squadId);
-    const sourceXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
-    const xg = sourceXg?.apps === player.appearances ? sourceXg : undefined;
+    const exact = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
+    const abbreviated = abbreviatedPlayerKey(fullName);
+    const uniqueOfficial = players.filter(other => other.squadId === player.squadId && abbreviatedPlayerKey(`${other.firstName} ${other.lastName}`) === abbreviated).length === 1;
+    const alias = squad && uniqueOfficial && abbreviated ? xgData.aliases.get(`${player.competitionId}:${matchKey(squad.name)}:${abbreviated}`) : undefined;
+    const sourceXg = exact ?? alias;
+    const xg = sourceXg?.apps === events.games ? sourceXg : undefined;
     return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, goals90: events.totals.minutesPlayed > 0 ? Number((events.totals.goalsScored * 90 / events.totals.minutesPlayed).toFixed(3)) : null, seasonGoals: xg ? events.totals.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
   });
   const squadByName = new Map(squads.map((squad) => [`${squad.competitionId}:${matchKey(squad.name)}`, squad]));

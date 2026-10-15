@@ -3,3 +3,5 @@ pages-dist/
 pages/dashboard.json
 *.log
 .env*
+
+public/chart-assets/

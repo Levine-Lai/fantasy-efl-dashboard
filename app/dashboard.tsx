@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { chartDomain, formatChartTick } from "@/lib/chart-scale";
+import { exportChartPng } from "@/lib/export-chart";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DashboardData, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
@@ -34,12 +36,12 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
       </div>
       <div className="player-main">
         <div className="player-title"><strong>{player.name}</strong><span className={`pill pill-${labelFor(player)}`}>{labelFor(player)}</span></div>
-        <div className="player-meta"><span>{player.team}</span><span>{player.fixtures.join(" · ")}</span><span>动作 {player.actionScore.toFixed(1)} / 场</span></div>
+        <div className="player-meta"><span>{player.team}</span><span>{player.fixtures.join(" · ")}</span><span title="按官方逐场门槛计算关键传球、射正、解围、封堵、抢断、拦截或扑救的得分，再结合少量同位置先验估计；不含进球、助攻和零封分。">动作得分 {player.actionScore.toFixed(1)} / 场</span></div>
       </div>
       <div className="player-stat"><span>预计分钟</span><b>{player.expectedMinutes}′</b></div>
       <div className="player-stat ownership-stat"><span>持有</span><b>{player.ownership}%</b></div>
       <div className="player-stat desktop-stat"><span>对阵</span><b>{player.matchup > 0 ? "+" : ""}{player.matchup}%</b></div>
-      <div className="score"><span>预计分</span><b>{player.score}</b></div>
+      <div className="score"><span>预期得分</span><b>{player.score}</b></div>
     </article>
   );
 }
@@ -52,15 +54,18 @@ const statColumns: { key: StatKey; label: string }[] = [
   { key: "penaltySaves", label: "扑点" }, { key: "goalsConceded", label: "失球" },
   { key: "clearances", label: "解围" }, { key: "blocks", label: "封堵" },
   { key: "tackles", label: "抢断" }, { key: "interceptions", label: "拦截" },
-  { key: "yellowCards", label: "黄牌" }, { key: "redCards", label: "红牌" },
-  { key: "ownGoals", label: "乌龙" }, { key: "penaltyMisses", label: "失点" },
-  { key: "hatTricks", label: "帽子戏法" },
+
 ];
 
 const keeperOnly = new Set<StatKey>(["saves", "penaltySaves"]);
-const keeperHidden = new Set<StatKey>(["goalsScored", "assists", "keyPasses", "shotsOnTarget", "clearances", "blocks", "tackles", "interceptions", "penaltyMisses", "hatTricks"]);
+const positionStats: Record<string, ReadonlySet<StatKey>> = {
+  GK: new Set(["points", "minutesPlayed", "cleanSheet", "saves", "penaltySaves", "goalsConceded"]),
+  DEF: new Set(["points", "minutesPlayed", "goalsScored", "assists", "cleanSheet", "goalsConceded", "clearances", "blocks", "tackles", "interceptions"]),
+  MID: new Set(["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "tackles", "interceptions"]),
+  FWD: new Set(["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget"]),
+};
 function applicableStat(key: StatKey, position: string) {
-  return position === "GK" ? !keeperHidden.has(key) : !keeperOnly.has(key);
+  return positionStats[position]?.has(key) ?? false;
 }
 
 function StatsTable({ players }: { players: PlayerStat[] }) {
@@ -119,20 +124,14 @@ function formatUpdated(value: string) { return value ? new Intl.DateTimeFormat("
 
 type AnalyticsDatum = { id: string; name: string; image: string; x: number; y: number; subtitle: string; detail: string };
 
-function chartDomain(values: number[], includeZero = false): [number, number] {
-  if (!values.length) return [0, 1];
-  const low = Math.min(...values), high = Math.max(...values);
-  const padding = Math.max(0.08, (high - low) * 0.14);
-  const minimum = includeZero ? Math.min(0, Math.floor(low * 10) / 10) : (low >= 0 ? Math.max(0, Math.floor((low - padding) * 10) / 10) : Math.floor((low - padding) * 10) / 10);
-  const maximum = Math.ceil((high + padding) * 10) / 10;
-  return [minimum, Math.max(minimum + 0.2, maximum)];
-}
-
 function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string }) {
   const [mode, setMode] = useState<"team" | "player">("team");
   const [competition, setCompetition] = useState("10");
   const [position, setPosition] = useState("ATT");
   const [minimum, setMinimum] = useState(450);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState("");
   const [hovered, setHovered] = useState<string | null>(null);
   const [xKey, setXKey] = useState("xgPerGame");
   const [yKey, setYKey] = useState("xgaPerGame");
@@ -151,7 +150,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   ] : [
     ...(position !== "GK" ? [{key:"xg90",label:"预期进球 / 90",group:"预期与效率"},{key:"goals90",label:"实际进球 / 90",group:"预期与效率"},{key:"goalInvolvements90",label:"进球 + 助攻 / 90",group:"预期与效率"},{key:"keyPasses90",label:"关键传球 / 90",group:"预期与效率"},{key:"shotsOnTarget90",label:"射正 / 90",group:"预期与效率"},{key:"defensiveActions90",label:"防守动作 / 90",group:"预期与效率"}] : [{key:"saveRate",label:"扑救率 · %",group:"门将效率"}]),
     {key:"ownership",label:"持有率 · %",group:"样本与热度"},{key:"appearances",label:"出场次数",group:"样本与热度"},
-    ...statColumns.filter(({key})=>position === "ALL" || applicableStat(key, position === "ATT" ? "MID" : position)).map(({key,label})=>({key,label:label+" / 场",group:keeperOnly.has(key)?"门将动作":"基础场均"}))];
+    ...statColumns.filter(({key})=>position === "ALL" || (position === "ATT" ? applicableStat(key, "MID") || applicableStat(key, "FWD") : applicableStat(key, position))).map(({key,label})=>({key,label:label+" / 场",group:keeperOnly.has(key)?"门将动作":"基础场均"}))];
   const activeXKey = metrics.some(m=>m.key===xKey) ? xKey : "points";
   const activeYKey = metrics.some(m=>m.key===yKey) ? yKey : "minutesPlayed";
   const xLabel = metrics.find(m=>m.key===activeXKey)?.label ?? activeXKey;
@@ -168,17 +167,17 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
     const value = "perGame" in row && key in row.perGame ? row.perGame[key as StatKey] : (row as unknown as Record<string, unknown>)[key];
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   };
-  const candidates = mode === "team" ? teams.filter(t=>competition==="ALL" || t.competitionId===Number(competition)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && (![activeXKey,activeYKey].includes("xg90") || (p.xgMinutes != null && p.xgMinutes>=minimum)) && (competition==="ALL" || p.competitionId===Number(competition)) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
+  const candidates = mode === "team" ? teams.filter(t=>competition==="ALL" || t.competitionId===Number(competition)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && (competition==="ALL" || p.competitionId===Number(competition)) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
   const dots: AnalyticsDatum[] = candidates.flatMap(row=>{
     const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
     return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
   });
   const selected = dots.find(d=>d.id===hovered);
   const comparison = mode==="player" && activeXKey==="xg90" && activeYKey==="goals90";
-  const playerMaximum=Math.max(0.5,Math.ceil(Math.max(...dots.flatMap(d=>[d.x,d.y]),0)*10)/10);
-  const xDomain: [number,number] = comparison ? [0,playerMaximum] : chartDomain(dots.map(d=>d.x));
-  const yDomain: [number,number] = comparison ? [0,playerMaximum] : chartDomain(dots.map(d=>d.y));
-  const left = 76, top = 52, size = 686, right = left + size, bottom = top + size;
+  const playerMaximum = chartDomain(dots.flatMap(d=>[d.x,d.y]))[1];
+  const xDomain: [number,number] = comparison ? chartDomain(dots.flatMap(d=>[d.x,d.y])) : chartDomain(dots.map(d=>d.x));
+  const yDomain: [number,number] = comparison ? chartDomain(dots.flatMap(d=>[d.x,d.y])) : chartDomain(dots.map(d=>d.y));
+  const left = 92, top = 68, size = 654, right = left + size, bottom = top + size;
   const x = (value: number) => left + (lowerBetter(activeXKey) ? 1 - (value - xDomain[0]) / (xDomain[1] - xDomain[0]) : (value - xDomain[0]) / (xDomain[1] - xDomain[0])) * size;
   const y = (value: number) => lowerBetter(activeYKey)
     ? top + (value - yDomain[0]) / (yDomain[1] - yDomain[0]) * size
@@ -211,9 +210,8 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
       <aside className="analytics-sidebar">
         <div className="section-heading"><div><ChartScatter size={18} /><h2>可视化表格</h2></div></div>
         <div className="analytics-switch" role="group" aria-label="图表对象">
-          <button type="button" onClick={() => changeMode("team")} disabled={mode === "team"} aria-label="切换到球队">‹</button>
-          <strong>{mode === "team" ? "球队" : "球员"}</strong>
-          <button type="button" onClick={() => changeMode("player")} disabled={mode === "player"} aria-label="切换到球员">›</button>
+          <button type="button" onClick={() => changeMode("player")} aria-pressed={mode === "player"}>球员</button>
+          <button type="button" onClick={() => changeMode("team")} aria-pressed={mode === "team"}>球队</button>
         </div>
         {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><FilterSelect aria-label={label+"数据"} value={index===0?activeXKey:activeYKey} onValueChange={value=>{(index===0?setXKey:setYKey)(value);setHovered(null);}}>{metrics.map(m=><option key={m.key} value={m.key} data-group={m.group}>{m.label}</option>)}</FilterSelect></label>)}
         <div className="chart-controls">
@@ -225,14 +223,24 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
         <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
-        <div className="analytics-visual-heading"><strong>{xLabel+" × "+yLabel}</strong><span>{comparison?"虚线：实际进球 = xG":"虚线：当前样本均值"}</span></div>
-        <div className="chart-svg-wrap"><svg className="opportunity-svg" viewBox="0 0 820 820" role="img" aria-label={xLabel+" 与 "+yLabel+" 散点图"}>
+        <div className="analytics-visual-heading"><strong>{xLabel+" × "+yLabel}</strong><div className="chart-heading-actions"><span>{comparison?"虚线：实际进球 = xG":"虚线：当前样本均值"}</span><button className="chart-export" type="button" disabled={exporting || !dots.length} onClick={async () => {
+          if (!svgRef.current) return;
+          setExporting(true); setExportStatus("正在生成图片…");
+          try {
+            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + (competitionName[Number(competition)] ?? "全部级别") + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + ".png" });
+            setExportStatus(fallbackCount ? "图片已导出，部分球衣无法加载，已以文字标记替代。" : "图片已导出");
+          } catch { setExportStatus("导出失败，请重试。"); }
+          finally { setExporting(false); }
+        }}><Download size={15} />{exporting ? "导出中…" : "导出图片"}</button></div></div>
+        {exportStatus && <p className="chart-export-status" role="status">{exportStatus}</p>}
+        {candidates.length > dots.length && <details className="chart-missing"><summary>{candidates.length-dots.length} 个对象缺少所选指标，查看名单</summary><p>{candidates.filter(row=>valueFor(row,activeXKey)==null || valueFor(row,activeYKey)==null).map(row=>("perGame" in row ? row.fullName : row.name)).join("、")}</p></details>}
+        <div className="chart-svg-wrap"><svg ref={svgRef} className="opportunity-svg" viewBox="0 0 820 820" role="img" aria-label={xLabel+" 与 "+yLabel+" 散点图"}>
           {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
             const xv = xDomain[0] + fraction * (xDomain[1] - xDomain[0]);
             const yv = yDomain[0] + fraction * (yDomain[1] - yDomain[0]);
-            return <g key={fraction}><line className="chart-grid" x1={x(xv)} x2={x(xv)} y1={top} y2={bottom} /><line className="chart-grid" x1={left} x2={right} y1={y(yv)} y2={y(yv)} /><text className="chart-tick" x={x(xv)} y={bottom + 24} textAnchor="middle">{xv.toFixed(1)}</text><text className="chart-tick" x={left - 12} y={y(yv) + 4} textAnchor="end">{yv.toFixed(1)}</text></g>;
+            return <g key={fraction}><line className="chart-grid" x1={x(xv)} x2={x(xv)} y1={top} y2={bottom} /><line className="chart-grid" x1={left} x2={right} y1={y(yv)} y2={y(yv)} /><text className="chart-tick" x={x(xv)} y={bottom + 24} textAnchor="middle">{formatChartTick(xv, xDomain)}</text><text className="chart-tick" x={left - 12} y={y(yv) + 4} textAnchor="end">{formatChartTick(yv, yDomain)}</text></g>;
           })}
-          {!comparison ? <><line className="chart-midline" x1={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} x2={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} y2={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">{activeXKey==="xgPerGame" && activeYKey==="xgaPerGame" ? "攻强 · 守强" : ""}</text></> : <><line className="chart-midline" x1={x(0)} y1={y(0)} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
+          {!comparison ? <><line className="chart-midline" x1={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} x2={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} y2={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">{activeXKey==="xgPerGame" && activeYKey==="xgaPerGame" ? "攻强 · 守强" : ""}</text></> : <><line className="chart-midline" x1={x(Math.max(xDomain[0], yDomain[0]))} y1={y(Math.max(xDomain[0], yDomain[0]))} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
           <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={11} /></clipPath>)}</defs>
           {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + (hovered === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(datum.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(datum.id); } }}>
             <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={12} />
@@ -274,7 +282,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
                   <span className="lineup-position">{position}</span>
                   <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
                   <RichImage className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
-                  <strong>{player.name}</strong><small>{player.team}</small>
+                  <strong>{player.name}</strong><small>{player.team}</small><span className="lineup-score">预期得分 <b>{player.score.toFixed(1)}</b></span>
                   <FixtureBadges fixtures={player.fixtureBadges} />
                   {player.id === captain?.id && <span className="lineup-captain" aria-label="队长">C</span>}
                 </div>)}
@@ -295,7 +303,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(0, 10).map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
             ))}
           </Tabs>}
-          <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
+          <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。列表中的“动作得分 / 场”是仅由关键传球、射正、防守动作或扑救获得的每场预期分（结合少量同位置先验估计），不含进球、助攻和零封，也不是动作次数。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
           </section>
         </section>
 
