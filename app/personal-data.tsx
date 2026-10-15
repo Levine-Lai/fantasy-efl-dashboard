@@ -38,7 +38,7 @@ export function PersonalData({players,selectedId,onSelect,officialUpdatedAt,xgUp
           if(e.key==='Escape'){setSearchOpen(false);return;}
           if(e.key==='ArrowDown' || e.key==='ArrowUp'){e.preventDefault();setSearchOpen(true);setActiveResult(i=>Math.max(0,Math.min(choices.length-1,i+(e.key==='ArrowDown'?1:-1))));}
           if(e.key==='Enter' && searchOpen && choices.length){e.preventDefault();selectPlayer(choices[Math.min(activeResult,choices.length-1)]);}
-        }} placeholder="输入姓名，实时搜索"/></label>
+        }} placeholder="输入球员姓名"/></label>
         {searchOpen && <div className="personal-search-popover"><div className="search-result-count">符合筛选 {choices.length} 人</div><div id="personal-player-results" role="listbox" aria-label="球员搜索结果">{choices.map((p,index)=><button type="button" role="option" id={`personal-result-${p.id}`} aria-selected={index===activeResult} key={p.id} onClick={()=>selectPlayer(p)}><img src={p.teamLogo} alt="" loading="lazy"/><span><strong>{p.fullName}</strong><small>{p.team} · {names[p.position]}</small></span></button>)}{!choices.length && <p className="search-no-results">没有匹配球员，请检查姓名、球队或位置筛选。</p>}</div></div>}
       </div>
       <label><span>比较样本门槛</span><FilterSelect value={String(minimum)} onValueChange={v=>setMinimum(Number(v))}><option value="90">90 分钟</option><option value="450">450 分钟</option><option value="900">900 分钟</option></FilterSelect></label>

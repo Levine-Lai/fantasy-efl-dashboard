@@ -14,8 +14,8 @@ assert.equal(ranking(.1+.2,[.3,.1+.2,.1]).percentile,75);
 assert.equal(ranking(null,[1,2]),null);assert.equal(ranking(1,[1]),null);
 assert.deepEqual(ranking(0,[0,0,0]),{rank:1,n:3,percentile:50});
 assert.equal(tint(null),'#ffffff');assert.equal(tint(50),'rgb(255,255,255)');
-for(const p of [0,25,75,100])assert.ok(tint(p).match(/\d+/g).every(channel=>Number(channel)>=229));
-const {projectTeamMatch}=await load('../lib/dashboard-data.ts');
+for(const p of [0,25,75,100])assert.ok(tint(p).match(/\d+/g).every(channel=>Number(channel)>=180));
+const {projectTeamMatch,recentTeamForm}=await load('../lib/dashboard-data.ts');
 const base={rank:12,opponentRank:12,own:{played:10,xg_per_game:1.4,xga_per_game:1.4},opposing:{played:10,xg_per_game:1.4,xga_per_game:1.4},league:{attack:1.4,defense:1.4},home:true,wins:4,games:10};
 const score=projectTeamMatch(base).score;
 assert.ok(projectTeamMatch({...base,rank:1}).score>score);
@@ -45,3 +45,10 @@ for(const league of [10,11,12]) {
  assert.ok(Math.abs(scored-conceded)<1e-6,'Every league goal must also be conceded by an opponent');
 }
 console.log('Team aggregates passed: 72 unique clubs, finite per-game values and balanced league goals');
+
+const fixtures=Array.from({length:7},(_,i)=>({id:i+1,date:`2026-10-${String(i+1).padStart(2,'0')}T12:00:00Z`}));
+const results=fixtures.map((g,i)=>({gameId:g.id,squadId:1,win:i%3===0?1:0,draw:i%3===1?1:0}));
+assert.deepEqual(recentTeamForm([...results].reverse().concat(results[6]),fixtures,1),['L','W','D','L','W']);
+assert.deepEqual(recentTeamForm(results,fixtures,2),[]);
+for(const round of [data,data.upcomingRound].filter(Boolean))for(const team of round.teams){assert.ok(team.form.length<=5);if(round===data)assert.equal(team.form.length,Math.min(5,data.teamStats.find(t=>t.id===team.id).played));assert.ok(team.form.every(v=>['W','D','L'].includes(v)));}
+console.log('Recent team form passed: calendar order, deduplicated games, last five results and upcoming round');

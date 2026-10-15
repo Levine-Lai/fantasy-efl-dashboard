@@ -126,7 +126,7 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
         <label><span>至少出场</span><FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></FilterSelect></label>
         <span className="stats-count">{filtered.length} 人</span>
       </div>
-      <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
+      <p className="table-scroll-hint">左右滑动查看全部数据 · 球员列固定</p><div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
           <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href={`./personal.html?player=${player.id}`} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
@@ -158,6 +158,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
   const [hovered, setHovered] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
   const [xKey, setXKey] = useState("xgPerGame");
   const [yKey, setYKey] = useState("xgaPerGame");
   const metrics = mode === "team" ? [
@@ -197,7 +198,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
     const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
     return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
   });
-  const selected = dots.find(d=>d.id===hovered);
+  const selected = dots.find(d=>d.id===(hovered ?? pinned));
   const comparison = mode==="player" && activeXKey==="xg90" && activeYKey==="goals90";
   const playerMaximum = chartDomain(dots.flatMap(d=>[d.x,d.y]))[1];
   const xDomain: [number,number] = comparison ? chartDomain(dots.flatMap(d=>[d.x,d.y])) : chartDomain(dots.map(d=>d.x));
@@ -267,12 +268,12 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           })}
           {!comparison ? <><line className="chart-midline" x1={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} x2={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} y2={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">{activeXKey==="xgPerGame" && activeYKey==="xgaPerGame" ? "攻强 · 守强" : ""}</text></> : <><line className="chart-midline" x1={x(Math.max(xDomain[0], yDomain[0]))} y1={y(Math.max(xDomain[0], yDomain[0]))} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
           <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={11} /></clipPath>)}</defs>
-          {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + (hovered === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(datum.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(datum.id); } }}>
+          {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + ((hovered ?? pinned) === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => {setPinned(datum.id);setHovered(datum.id);}} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPinned(datum.id); setHovered(datum.id); } else if(event.key === "Escape") {setPinned(null);setHovered(null);} }}>
             <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={12} />
             {datum.image && loadChartImages && <image href={datum.image} x={x(datum.x) - 11} y={y(datum.y) - 11} width={22} height={22} preserveAspectRatio="xMidYMid meet" clipPath={"url(#analytics-clip-" + datum.id + ")"} pointerEvents="none" />}
             <circle className="chart-jersey-hit" cx={x(datum.x)} cy={y(datum.y)} r={16} />
           </g>)}
-          {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
+          {labels.filter((label) => label.id !== selected?.id).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
           {selected && <g className="chart-tooltip" transform={"translate(" + tooltipX + " " + tooltipY + ")"}>
             <rect className="tooltip-shell" width={310} height={140} rx={13} />
             <text className="chart-tooltip-name" x={14} y={26}>{selected.name}</text>
@@ -286,7 +287,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
 
           <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{xLabel+(lowerBetter(activeXKey)?"（向右越低）":" →")}</text>
           <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{yLabel+(lowerBetter(activeYKey)?"（向上越低）":" ↑")}</text>
-        </svg>{!dots.length && <p className="stats-empty">当前筛选无可用数据，请更换指标或降低出场门槛。</p>}</div>
+        </svg>{!dots.length && <p className="stats-empty">当前筛选无可用数据，请更换指标或降低出场门槛。</p>}</div><div className="chart-touch-detail" aria-live="polite">{selected?<><strong>{selected.name}</strong><span>{selected.detail}</span></>:<span>轻点图中球队或球员，查看完整数据</span>}</div>
       </div>
     </div>
   </section>;
@@ -359,7 +360,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               {active.teams.map((team, index) => (
                 <article className="club-row" key={team.id}>
                   <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.leaguePosition?`联赛第 ${team.leaguePosition} · `:""}{team.fixtures.join(" · ")}</small><small>xG {team.projectedXg?.toFixed(2) ?? "—"} / xGA {team.projectedXga?.toFixed(2) ?? "—"}</small></div>
-                  <div className="club-form">{team.form.map((item, i) => <i key={`${item}-${i}`}>{item}</i>)}</div><b>{team.score}</b>
+                  <div className="club-form" aria-label={`最近 ${team.form.length} 场，由旧到新：${team.form.join(" ")}`}><span className="club-form-label">近5场</span>{team.form.map((item, i) => <i className={`form-${item}`} title={item==="W"?"胜":item==="L"?"负":"平"} key={`${item}-${i}`}>{item}</i>)}</div><b>{team.score}</b>
                 </article>
               ))}
             </div>

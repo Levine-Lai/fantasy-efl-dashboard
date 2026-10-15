@@ -12,6 +12,13 @@ type LivePlayer = { playerId: number; gameId: number; squadId: number } & Partia
 type LiveSquad = { points?: number; squadId: number; gameId: number; win: number; draw: number; awayWin: number; cleanSheet: number; goalsScored: number };
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
+// Calendar order matters when postponed fixtures are played in later rounds.
+export function recentTeamForm(rows: Pick<LiveSquad, 'gameId'|'squadId'|'win'|'draw'>[], games: Pick<RawGame,'id'|'date'>[], squadId:number) {
+  const dates=new Map(games.map(game=>[game.id,Date.parse(game.date)]));
+  const unique=new Map(rows.filter(row=>row.squadId===squadId && Number.isFinite(dates.get(row.gameId))).map(row=>[row.gameId,row]));
+  return [...unique.values()].sort((a,b)=>dates.get(a.gameId)!-dates.get(b.gameId)! || a.gameId-b.gameId).slice(-5).map(row=>row.win?'W':row.draw?'D':'L');
+}
+
 const componentKeys = ["attackActions", "defenseActions", "goals", "assists", "cleanSheet", "other"] as const;
 export type ComponentKey = typeof componentKeys[number];
 export type ScoreComponents = Record<ComponentKey, number>;
@@ -315,7 +322,7 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
       const opposing = opponent && xgData.teamRows.get(`${squad.competitionId}:${matchKey(opponent.name)}`);
       return projectTeamMatch({ rank: squad.leaguePosition, opponentRank: opponent?.leaguePosition, own, opposing, league, home:match.home, wins:agg.wins, games:agg.games });
     });
-    return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: (squad.last3Form ?? []).slice(-3), score: Number(projections.reduce((sum,p)=>sum+p.score,0).toFixed(1)), leaguePosition:squad.leaguePosition ?? null, projectedXg:own && league ? Number(projections.reduce((sum,p)=>sum+p.xg,0).toFixed(2)) : null, projectedXga:own && league ? Number(projections.reduce((sum,p)=>sum+p.xga,0).toFixed(2)) : null };
+    return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: recentTeamForm(lives.flatMap(live=>live.squads),rounds.flatMap(round=>round.games),squad.id), score: Number(projections.reduce((sum,p)=>sum+p.score,0).toFixed(1)), leaguePosition:squad.leaguePosition ?? null, projectedXg:own && league ? Number(projections.reduce((sum,p)=>sum+p.xg,0).toFixed(2)) : null, projectedXga:own && league ? Number(projections.reduce((sum,p)=>sum+p.xga,0).toFixed(2)) : null };
   }).sort((a, b) => b.score - a.score).slice(0, 12);
   return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 10 }, picks, startingSeven, playerStats, teamStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }

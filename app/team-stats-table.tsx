@@ -30,7 +30,7 @@ export function TeamStatsTable({teams}:{teams:TeamStat[]}) {
   return <section className="panel stats-panel team-stats-panel" id="team-stats">
     <div className="section-heading wide-heading"><div><Trophy size={18}/><h2>球队场均数据</h2></div><span>Fantasy EFL / Statz</span></div>
     <div className="stats-toolbar"><label><span>搜索球队</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="球队名称"/></label><label><span>联赛级别</span><FilterSelect value={league} onValueChange={setLeague}>{leagueOptions.map(o=><option value={o.value} key={o.value}>{o.label}</option>)}</FilterSelect></label><span className="stats-count">{rows.length} 支球队</span></div>
-    <div className="stats-scroll" role="region" aria-label="球队场均数据表，可横向滚动" tabIndex={0}><table className="stats-table">
+    <p className="table-scroll-hint">左右滑动查看全部数据 · 球队列固定</p><div className="stats-scroll" role="region" aria-label="球队场均数据表，可横向滚动" tabIndex={0}><table className="stats-table">
       <thead><tr><th scope="col" className="stats-name-col">球队</th>{columns.map(c=><th key={c.key} scope="col" aria-sort={sort===c.key?(descending?'descending':'ascending'):'none'}><button type="button" onClick={()=>{setSort(c.key);setDescending(sort===c.key?!descending:true);}}>{c.label}<span>{sort===c.key?(descending?'↓':'↑'):'↕'}</span></button></th>)}</tr></thead>
       <tbody>{rows.map(t=><tr key={t.id}><th scope="row" className="stats-name-col"><span className="stats-player-link"><img className="stats-team-logo" src={t.logo} alt="" loading="lazy"/><strong>{t.name}</strong></span></th>{columns.map(c=>{
         const value=t[c.key];const result=value!=null && c.key!=='played'?ranking(value,teams.filter(p=>p.competitionId===t.competitionId).map(p=>p[c.key]),'lower' in c && c.lower):null;

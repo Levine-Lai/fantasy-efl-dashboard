@@ -31,7 +31,7 @@ export function ranking(value:number|null, values:(number|null)[],lower=false) {
 }
 export function tint(percentile:number|null) {
   if(percentile==null) return '#ffffff';
-  const endpoint=percentile>=50?[229,243,232]:[250,232,232];
+  const endpoint=percentile>=50?[190,225,199]:[244,190,190];
   const weight=Math.min(1,Math.abs(percentile-50)/50);
   return `rgb(${endpoint.map(v=>Math.round(255+(v-255)*weight)).join(',')})`;
 }
