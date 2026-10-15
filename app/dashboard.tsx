@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { PersonalData } from "./personal-data";
+import { ranking, tint } from "@/lib/player-profile";
 import { leagueOptions, includesLeague, leagueLabel } from "@/lib/league-selection";
 import { chartDomain, formatChartTick } from "@/lib/chart-scale";
 import { exportChartPng } from "@/lib/export-chart";
@@ -71,7 +73,7 @@ function applicableStat(key: StatKey, position: string) {
   return positionStats[position]?.has(key) ?? false;
 }
 
-function StatsTable({ players }: { players: PlayerStat[] }) {
+function StatsTable({ players, onSelect }: { players: PlayerStat[]; onSelect:(id:number)=>void }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
   const [position, setPosition] = useState("OUT");
@@ -88,6 +90,19 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       const right = effectiveSortKey === "appearances" ? b.appearances : b.perGame[effectiveSortKey];
       return (descending ? right - left : left - right) || b.appearances - a.appearances || a.fullName.localeCompare(b.fullName);
     }), [players, minimum, competition, position, query, effectiveSortKey, descending]);
+  const colorRanks = useMemo(()=>{
+    const result=new Map<string,number>();
+    const pool=players.filter(p=>p.appearances>=minimum && includesLeague(competition,p.competitionId));
+    for(const role of positions) for(const division of [10,11,12]) {
+      const group=pool.filter(p=>p.position===role && p.competitionId===division);
+      for(const {key} of statColumns) {
+        if(!applicableStat(key,role)) continue;
+        const values=group.map(p=>p.perGame[key]);
+        for(const p of group) {const r=ranking(p.perGame[key],values,key==='goalsConceded');if(r)result.set(`${p.id}:${key}`,r.percentile);}
+      }
+    }
+    return result;
+  },[players,minimum,competition]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / 30));
   const currentPage = Math.min(page, totalPages - 1);
   const visible = filtered.slice(currentPage * 30, (currentPage + 1) * 30);
@@ -114,11 +129,11 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href="#personal" onClick={()=>onSelect(player.id)} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
-      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数；0.0 = 零值或该位置未统计</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
+      <div className="stats-footer"><span>浅绿优于同联赛同位置样本，浅红低于；0.0 = 零值或该位置未统计</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
     </section>
   );
 }
@@ -278,6 +293,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
 }
 
 export function Dashboard({ data }: { data: DashboardData }) {
+  const [profilePlayerId,setProfilePlayerId]=useState<number|null>(null);
   const [playerQuery, setPlayerQuery] = useState("");
   const [rankPosition, setRankPosition] = useState<typeof positions[number]>("GK");
   const [rankPage, setRankPage] = useState(0);
@@ -294,7 +310,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="https://fantasy.efl.com/apple-touch-icon.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a>
-        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
+        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="#personal">个人数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
       </header>
 
       <div className="dashboard-shell" id="top">
@@ -314,12 +330,12 @@ export function Dashboard({ data }: { data: DashboardData }) {
               </div>)}
             </div>
             <div className="team-picks-heading"><Trophy size={16} /><strong>推荐球队</strong><span>选择 2 队</span></div>
-            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong><FixtureBadges fixtures={team.fixtureBadges} /></div><b>{team.score}</b></article>)}</div>
+            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong><small>联赛第 {team.leaguePosition ?? "—"}</small><FixtureBadges fixtures={team.fixtureBadges} /></div><b title="球队综合推荐分">{team.score}</b></article>)}</div>
           </div>
           <section className="panel recommendations" id="recommendations">
           <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{active.meta.roundName} 球员预期得分</h2></div><span>截止 {lockout}</span></div>
           {!!active.meta.recentRoundName && <div className="round-data-status">已计入 {active.meta.recentRoundName} 已结算 {active.meta.recentFinalizedGames}/{active.meta.recentTotalGames} 场 · 未赛场次结束后更新预测</div>}
-          <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label>{playerQuery.trim() ? <span>{searchResults.length} 人</span> : <div className="ranking-pager" role="group" aria-label="推荐排名翻页" onKeyDown={event=>{if(event.key==="ArrowLeft" || event.key==="ArrowRight"){event.preventDefault();setRankPage(Math.max(0,Math.min(rankPages-1,currentRankPage+(event.key==="ArrowRight"?1:-1))));}}}><button type="button" aria-label="上一页推荐排名" disabled={currentRankPage===0} onClick={()=>setRankPage(currentRankPage-1)}><ChevronLeft size={16}/></button><span>{currentRankPage*10+1}–{Math.min((currentRankPage+1)*10,ranked.length)} <small>/ {ranked.length}</small></span><button type="button" aria-label="下一页推荐排名" disabled={currentRankPage>=rankPages-1} onClick={()=>setRankPage(currentRankPage+1)}><ChevronRight size={16}/></button></div>}</div>
+          <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label>{playerQuery.trim() ? <span>{searchResults.length} 人</span> : <div className="ranking-pager" role="group" aria-label="推荐排名翻页" onKeyDown={event=>{if(event.key==="ArrowLeft" || event.key==="ArrowRight"){event.preventDefault();setRankPage(Math.max(0,Math.min(rankPages-1,currentRankPage+(event.key==="ArrowRight"?1:-1))));}}}><button type="button" aria-label="上一页推荐排名" disabled={currentRankPage===0} onClick={()=>setRankPage(currentRankPage-1)}><ChevronLeft size={16}/></button><span>{currentRankPage+1}</span><button type="button" aria-label="下一页推荐排名" disabled={currentRankPage>=rankPages-1} onClick={()=>setRankPage(currentRankPage+1)}><ChevronRight size={16}/></button></div>}</div>
           {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs value={rankPosition} onValueChange={value=>{setRankPosition(value as typeof rankPosition);setRankPage(0);}}>
             <TabsList className="position-tabs" aria-label="位置筛选">
               {positions.map((position) => <TabsTrigger key={position} value={position}>{positionName[position]}</TabsTrigger>)}
@@ -328,21 +344,22 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(currentRankPage*10, (currentRankPage+1)*10).map((player, index) => <PlayerRow player={player} rank={currentRankPage*10 + index + 1} key={player.id} />)}</div></TabsContent>
             ))}
           </Tabs>}
-          <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。列表中的“动作得分 / 场”是仅由关键传球、射正、防守动作或扑救获得的每场预期分（结合少量同位置先验估计），不含进球、助攻和零封，也不是动作次数。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
+          <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。列表中的“动作得分 / 场”是仅由关键传球、射正、防守动作或扑救获得的每场预期分（结合少量同位置先验估计），不含进球、助攻和零封，也不是动作次数。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 通过同队唯一姓名或唯一缩写匹配，并核对出场次数；只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
           </section>
         </section>
 
         <OpportunityChart players={data.playerStats} teams={data.teamStats} xgUpdatedAt={data.meta.xgUpdatedAt} officialUpdatedAt={data.meta.updatedAt} />
 
-        <StatsTable players={data.playerStats} />
+        <StatsTable players={data.playerStats} onSelect={setProfilePlayerId} />
+        <PersonalData players={data.playerStats} selectedId={profilePlayerId} onSelect={setProfilePlayerId} officialUpdatedAt={data.meta.updatedAt} xgUpdatedAt={data.meta.xgUpdatedAt} />
 
         <section className="lower-grid">
           <div className="panel" id="clubs">
             <div className="section-heading"><div><Trophy size={18} /><h2>球队选择</h2></div><span>前 {active.teams.length} 队</span></div>
-            <div className="club-list">
+            <p className="team-model-note">推荐分：排名差 15% · 对阵预期进球 35% · 对阵预期失球 35% · 历史胜率 15%。逐场计算，双赛相加；推荐指数，不等于官方 Fantasy 积分。</p><div className="club-list">
               {active.teams.map((team, index) => (
                 <article className="club-row" key={team.id}>
-                  <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.fixtures.join(" · ")}</small></div>
+                  <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.leaguePosition?`联赛第 ${team.leaguePosition} · `:""}{team.fixtures.join(" · ")}</small><small>xG {team.projectedXg?.toFixed(2) ?? "—"} / xGA {team.projectedXga?.toFixed(2) ?? "—"}</small></div>
                   <div className="club-form">{team.form.map((item, i) => <i key={`${item}-${i}`}>{item}</i>)}</div><b>{team.score}</b>
                 </article>
               ))}

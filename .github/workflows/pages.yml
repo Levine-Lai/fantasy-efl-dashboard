@@ -29,10 +29,16 @@ jobs:
           key: ${{ runner.os }}-chart-thumbs-v2-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-chart-thumbs-v2-
       - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: data/player-advanced.json
+          key: ${{ runner.os }}-advanced-player-v1-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-advanced-player-v1-
       - run: node scripts/test-round-selection.mjs
       - run: npm run build
       - run: node scripts/test-chart-data.mjs
       - run: node scripts/test-dashboard-features.mjs
+      - run: node scripts/test-personal-data.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
           path: pages-dist

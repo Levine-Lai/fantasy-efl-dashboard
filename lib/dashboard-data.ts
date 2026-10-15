@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 const API = "https://fantasy.efl.com/json/fantasy";
 type Position = "GK" | "DEF" | "MID" | "FWD";
 type RawPlayer = { id: number; squadId: number; competitionId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; appearances: number; totalPoints: number; goalsScored: number; injuryDetails?: string | null; suspensionDetails?: string | null };
-type RawSquad = { id: number; competitionId: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[] };
+type RawSquad = { id: number; competitionId: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[]; leaguePosition?: number };
 type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number };
 type RawRound = { id: number; name: string; status: string; lockoutDate: string; games: (RawGame & { isFinalized?: boolean })[] };
 export const statKeys = ["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "cleanSheet", "saves", "penaltySaves", "goalsConceded", "clearances", "blocks", "tackles", "interceptions", "yellowCards", "redCards", "ownGoals", "penaltyMisses", "hatTricks"] as const;
@@ -43,11 +43,24 @@ export function blendXgGoalPoints(baseGoals: number, xg: number | null, xgMinute
   return baseGoals * (1 - weight) + xgGoalPoints * weight;
 }
 
+// Transparent recommendation index, not calibrated Fantasy team points.
+export function projectTeamMatch({rank,opponentRank,own,opposing,league,home,wins,games}: {rank?:number;opponentRank?:number;own?:{played:number;xg_per_game:number;xga_per_game:number};opposing?:{played:number;xg_per_game:number;xga_per_game:number};league?:{attack:number;defense:number};home:boolean;wins:number;games:number}) {
+  const average = league?.attack && league?.defense ? (league.attack+league.defense)/2 : 1.35;
+  const smooth = (value:number|undefined,n:number) => value != null && Number.isFinite(value) ? (value*n+average*8)/(n+8) : average;
+  const xg = smooth(own?.xg_per_game,own?.played ?? 0)*smooth(opposing?.xga_per_game,opposing?.played ?? 0)/average*(home?1.06:.94);
+  const xga = smooth(own?.xga_per_game,own?.played ?? 0)*smooth(opposing?.xg_per_game,opposing?.played ?? 0)/average*(home ? .94 : 1.06);
+  const rankSignal = rank && opponentRank ? (opponentRank-rank)/23 : 0;
+  const attackSignal = Math.max(-1,Math.min(1,xg/average-1));
+  const defenseSignal = Math.max(-1,Math.min(1,1-xga/average));
+  const formSignal = 2*(wins+2)/(games+4)-1;
+  return {xg,xga,score:10+4*(.15*rankSignal+.35*attackSignal+.35*defenseSignal+.15*formSignal)};
+}
+
 export type FixtureBadge = { label: string; opponent: string; opponentLogo: string };
 export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; fixtureBadges: FixtureBadge[]; reliability: number; expectedMinutes: number; score: number; matchup: number; actionScore: number; returnScore: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
-export type PlayerStat = { id: number; fullName: string; team: string; jerseyUrl: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; goals90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
+export type PlayerStat = { id: number; fullName: string; team: string; jerseyUrl: string; teamLogo: string; advanced?: { updatedAt: string; mins: number; apps: number; tkl: number | null; int: number | null; aer: number | null; due: number | null; duw: number | null; pas: number | null; apas: number | null; drp: number | null; cc: number | null; sdrb: number | null }; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; goals90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
 export type TeamStat = { id: number; name: string; fullName: string; logo: string; competitionId: number; played: number; xgPerGame: number | null; xgaPerGame: number | null; goalsPerGame: number | null; winRate: number | null; cleanSheetRate: number | null; pointsPerGame: number | null; xgdPerGame: number | null; xgShare: number | null; xptsPerGame: number | null; pointsDeltaPerGame: number | null; finishingDeltaPerGame: number | null };
-export type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; fixtureBadges: FixtureBadge[]; form: string[]; score: number };
+export type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; fixtureBadges: FixtureBadge[]; form: string[]; score: number; leaguePosition: number | null; projectedXg: number | null; projectedXga: number | null };
 export type NewsItem = { title: string; url: string; source: string; date: string; titleZh?: string; summary?: string; category?: string; impacts?: {kind:"positive"|"negative"|"injury"|"watch";text:string}[] };
 export type DashboardMeta = { roundId: number; roundName: string; lockoutAt: string; fixtureCount: number; doubleTeams: number; completedRounds: number; recentRoundName: string; recentFinalizedGames: number; recentTotalGames: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number };
 export type RoundRecommendations = { meta: DashboardMeta; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; teams: TeamPick[]; differentialCount: number };
@@ -229,14 +242,18 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     const expected = estimateComponents(componentsByPlayer.get(player.id) ?? emptyComponents(), agg.games, mean);
     const squad = squadsById.get(player.squadId);
     // A one-appearance prior avoids treating tiny samples as certainty.
-    const playingFactor = (agg.games + 1) / (clubGames + 2);
+    const playingFactor = Math.min(1, (agg.games + 1) / (clubGames + 2));
     // Two 75-minute prior appearances temper noisy early-season averages; the
     // resulting minute adjustment is deliberately capped to a small range.
     const expectedMinutes = (agg.minutes + 150) / (agg.games + 2);
     const minuteFactor = Math.max(0.94, Math.min(1.06, 1 + 0.15 * (expectedMinutes - 75) / 75));
     const fullName = `${player.firstName} ${player.lastName}`.trim();
-    const sourceXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
-    // A missing or out-of-sync feed leaves the goal baseline unchanged.
+    const exactXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
+    const abbreviated = abbreviatedPlayerKey(fullName);
+    const uniqueOfficial = players.filter(other=>other.squadId===player.squadId && abbreviatedPlayerKey(`${other.firstName} ${other.lastName}`)===abbreviated).length===1;
+    const aliasXg = squad && uniqueOfficial && abbreviated ? xgData.aliases.get(`${player.competitionId}:${matchKey(squad.name)}:${abbreviated}`) : undefined;
+    const sourceXg = exactXg ?? aliasXg;
+    // Missing, ambiguous or out-of-sync feeds leave the goal baseline unchanged.
     const matchedXg = sourceXg?.apps === agg.games ? sourceXg : undefined;
     const expectedGoals = blendXgGoalPoints(expected.goals, matchedXg?.xg ?? null, matchedXg?.minutes ?? null, expectedMinutes, player.position);
     const expectedPerMatch = expected.attackActions + expected.defenseActions + expectedGoals + expected.assists + expected.cleanSheet + expected.other;
@@ -277,7 +294,7 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     const alias = squad && uniqueOfficial && abbreviated ? xgData.aliases.get(`${player.competitionId}:${matchKey(squad.name)}:${abbreviated}`) : undefined;
     const sourceXg = exact ?? alias;
     const xg = sourceXg?.apps === events.games ? sourceXg : undefined;
-    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, goals90: events.totals.minutesPlayed > 0 ? Number((events.totals.goalsScored * 90 / events.totals.minutesPlayed).toFixed(3)) : null, seasonGoals: xg ? events.totals.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
+    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, goals90: events.totals.minutesPlayed > 0 ? Number((events.totals.goalsScored * 90 / events.totals.minutesPlayed).toFixed(3)) : null, seasonGoals: xg ? events.totals.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, events.totals[key] / events.games])) as Record<StatKey, number> }];
   });
   const squadByName = new Map(squads.map((squad) => [`${squad.competitionId}:${matchKey(squad.name)}`, squad]));
   const teamAliases: Record<string, string> = { miltonkeynesdons: "mkdons" };
@@ -291,12 +308,16 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
     const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
     const teamFixtures = fixtures.get(squad.id)!;
-    const homeGames = teamFixtures.filter((fixture) => fixture.startsWith("主")).length;
-    const fdr = homeGames ? squad.fdrHome ?? 3 : squad.fdrAway ?? 3;
-    const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
-    return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
+    const own = xgData.teamRows.get(`${squad.competitionId}:${matchKey(squad.name)}`);
+    const league = xgData.leagueAverages.get(squad.competitionId);
+    const projections = (fixtureDetails.get(squad.id) ?? []).map(match => {
+      const opponent = squadsById.get(match.opponentId);
+      const opposing = opponent && xgData.teamRows.get(`${squad.competitionId}:${matchKey(opponent.name)}`);
+      return projectTeamMatch({ rank: squad.leaguePosition, opponentRank: opponent?.leaguePosition, own, opposing, league, home:match.home, wins:agg.wins, games:agg.games });
+    });
+    return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: (squad.last3Form ?? []).slice(-3), score: Number(projections.reduce((sum,p)=>sum+p.score,0).toFixed(1)), leaguePosition:squad.leaguePosition ?? null, projectedXg:own && league ? Number(projections.reduce((sum,p)=>sum+p.xg,0).toFixed(2)) : null, projectedXga:own && league ? Number(projections.reduce((sum,p)=>sum+p.xga,0).toFixed(2)) : null };
   }).sort((a, b) => b.score - a.score).slice(0, 12);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 9 }, picks, startingSeven, playerStats, teamStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 10 }, picks, startingSeven, playerStats, teamStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {

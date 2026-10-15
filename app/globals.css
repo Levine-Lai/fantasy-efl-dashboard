@@ -391,3 +391,57 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
 .club-row > div:nth-child(3) { min-width: 0; }
 .club-row strong, .club-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 700px) { .club-row { grid-template-columns: 28px 34px minmax(0, 1fr) 48px; } }
+
+.lineup-pitch { background: repeating-linear-gradient(180deg,#e4eff4 0 96px,#d7e7ef 96px 192px); }
+.lineup-pitch::before, .lineup-pitch::after { border-color: #bbd2df; }
+.stats-table tbody td:hover { background: #dcecf6 !important; }
+.stats-player-link { display:flex; align-items:center; justify-content:flex-start; gap:10px; text-decoration:none; color:inherit; padding:0 5px; }
+.stats-player-link:hover strong { text-decoration:underline; text-underline-offset:3px; }
+.stats-team-logo { width:28px; height:28px; object-fit:contain; flex-shrink:0; }
+.stats-table .stats-name-col { min-width:235px; }
+.stats-zero { color:var(--ink); }
+.ranking-pager > span { min-width:30px; }
+.team-model-note { margin:0 0 12px; font-size:11px; line-height:1.7; color:#55748a; }
+.personal-panel { margin-top:24px; padding:24px; scroll-margin-top:85px; }
+.personal-filters { display:flex; flex-wrap:wrap; gap:14px; align-items:end; padding:8px 0 24px; }
+.personal-filters label { display:flex; flex-direction:column; gap:7px; min-width:95px; }
+.personal-filters label > span { font-size:12px; font-weight:700; }
+.personal-filters input { height:42px; width:180px; border:1px solid var(--border); border-radius:9px; padding:0 12px; background:white; }
+.personal-select { flex:1; max-width:340px; min-width:200px !important; }
+.personal-identity { display:flex; align-items:center; gap:18px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); padding:24px 0; }
+.personal-identity img { height:64px; width:64px; object-fit:contain; }
+.personal-identity h3 { font-size:28px; margin:0 0 8px; }
+.personal-identity p { margin:0; color:#55748a; font-size:13px; }
+.personal-sample { margin-left:auto; display:flex; flex-direction:column; text-align:center; gap:5px; }
+.personal-sample b { font-size:26px; }
+.personal-sample span { font-size:11px; color:#55748a; }
+.personal-scale, .profile-metric { display:grid; grid-template-columns:190px minmax(0,1fr) 100px; gap:24px; align-items:center; }
+.personal-scale { font-size:11px; color:#668396; padding:25px 0 10px; }
+.personal-scale > div { display:flex; justify-content:space-between; }
+.personal-scale > span:last-child { text-align:right; }
+.profile-metric { min-height:64px; }
+.profile-label { display:flex; flex-direction:column; gap:4px; }
+.profile-label strong { font-size:13px; }
+.profile-label small, .profile-value small { color:#728b9b; font-size:10px; }
+.percentile-track { position:relative; height:18px; background:#f1f4f6; border-radius:4px; }
+.percentile-track::after { content:''; position:absolute; height:26px; width:1px; top:-4px; left:50%; background:#c6d0d6; }
+.percentile-fill { height:100%; border-radius:4px; border:1px solid #dae4df; }
+.percentile-marker { position:absolute; z-index:1; top:50%; transform:translate(-50%,-50%); display:grid; place-items:center; width:32px; height:32px; border:1px solid #bccdc5; border-radius:50%; font-size:12px; box-shadow:0 2px 5px #1232; }
+.percentile-unavailable { position:absolute; left:12px; top:1px; font-size:11px; color:#78909e; }
+.profile-value { display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-variant-numeric:tabular-nums; }
+.profile-value strong { font-size:14px; }
+.profile-note { color:#6d8392; font-size:11px; line-height:1.8; margin:18px 0 0; }
+@media(max-width:700px) {
+ .personal-panel { padding:16px; }
+ .personal-scale,.profile-metric { grid-template-columns:116px minmax(0,1fr) 67px; gap:10px; }
+ .profile-label strong { font-size:11px; }
+ .personal-identity h3 { font-size:20px; }
+ .personal-identity img { width:42px; height:42px; }
+ .personal-filters { gap:10px; }
+ .personal-filters input { width:150px; }
+ .personal-select { max-width:none; }
+ .percentile-marker { width:27px; height:27px; font-size:10px; }
+}
+
+#stats, #clubs, #news { scroll-margin-top:85px; }
+.team-pick-main > small { font-size:10px; color:#668396; }
