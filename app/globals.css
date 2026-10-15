@@ -271,3 +271,27 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
 }
 
 .analytics-metric select { width:100%; min-width:0; padding:7px 2px; border:0; background:transparent; color:var(--prussian); font:inherit; font-size:12px; font-weight:700; }
+
+/* Shared lightweight filter controls. Menus live in a portal to avoid panel clipping. */
+.analytics-metric { gap: 6px; padding: 0; border: 0; background: transparent; color: var(--prussian); font-size: 12px; font-weight: 700; }
+.analytics-metric > span { font-size: 12px; }
+.filter-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-width: 0; min-height: 40px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); color: var(--prussian); font: inherit; font-size: 12px; text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.filter-select-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-select-trigger > span:last-child { flex: 0 0 auto; opacity: .6; }
+.filter-select-trigger:hover { border-color: color-mix(in srgb, var(--prussian) 38%, white); }
+.filter-select-trigger:focus-visible, .filter-select-trigger[data-state="open"] { outline: none; border-color: #7cabbf; box-shadow: 0 0 0 3px #0031530c; }
+.filter-select-trigger[data-state="open"] svg { transform: rotate(180deg); }
+.filter-select-menu { z-index: 100; width: max(var(--radix-select-trigger-width), 220px); max-width: calc(100vw - 24px); max-height: min(370px, var(--radix-select-content-available-height)); border: 1px solid #d9e5ec; border-radius: 13px; background: #fff; box-shadow: 0 12px 34px #00315316, 0 2px 6px #00315308; overflow: hidden; animation: filter-menu-in .13s ease-out; }
+.filter-select-viewport { padding: 6px; }
+.filter-select-group { padding: 11px 10px 5px; color: #74909f; font-size: 10px; letter-spacing: .08em; font-weight: 600; }
+.filter-select-option { position: relative; padding: 9px 32px 9px 10px; border-radius: 7px; color: var(--prussian); font-size: 12px; line-height: 1.4; cursor: pointer; outline: none; user-select: none; }
+.filter-select-option[data-highlighted] { background: #f0f6fa; }
+.filter-select-option[data-state="checked"] { background: #eaf3f8; color: var(--navy); font-weight: 650; }
+.filter-select-check { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #477e98; }
+.filter-select-scroll { display: flex; align-items: center; justify-content: center; height: 20px; background: white; color: #74909f; }
+.stats-inapplicable { background: #f8fafb; }
+.metric-methodology { color: #56778a; font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
+.metric-methodology summary { cursor: pointer; font-weight: 650; }
+.metric-methodology p { margin: 8px 0 0; }
+@keyframes filter-menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .filter-select-menu { animation: none; } }

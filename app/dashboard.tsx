@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DashboardData, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
 
@@ -56,6 +57,12 @@ const statColumns: { key: StatKey; label: string }[] = [
   { key: "hatTricks", label: "帽子戏法" },
 ];
 
+const keeperOnly = new Set<StatKey>(["saves", "penaltySaves"]);
+const keeperHidden = new Set<StatKey>(["goalsScored", "assists", "keyPasses", "shotsOnTarget", "clearances", "blocks", "tackles", "interceptions", "penaltyMisses", "hatTricks"]);
+function applicableStat(key: StatKey, position: string) {
+  return position === "GK" ? !keeperHidden.has(key) : !keeperOnly.has(key);
+}
+
 function StatsTable({ players }: { players: PlayerStat[] }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
@@ -64,24 +71,26 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
   const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
   const [descending, setDescending] = useState(true);
   const [page, setPage] = useState(0);
+  const columns = statColumns.filter(({ key }) => position === "ALL" || applicableStat(key, position));
+  const effectiveSortKey = sortKey === "appearances" || columns.some(column => column.key === sortKey) ? sortKey : "points";
   const filtered = useMemo(() => players
     .filter((player) => player.appearances >= minimum && (competition === "ALL" || player.competitionId === Number(competition)) && (position === "ALL" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
-      const left = sortKey === "appearances" ? a.appearances : a.perGame[sortKey];
-      const right = sortKey === "appearances" ? b.appearances : b.perGame[sortKey];
+      const left = effectiveSortKey === "appearances" ? a.appearances : a.perGame[effectiveSortKey];
+      const right = effectiveSortKey === "appearances" ? b.appearances : b.perGame[effectiveSortKey];
       return (descending ? right - left : left - right) || b.appearances - a.appearances || a.fullName.localeCompare(b.fullName);
-    }), [players, minimum, competition, position, query, sortKey, descending]);
+    }), [players, minimum, competition, position, query, effectiveSortKey, descending]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / 30));
   const currentPage = Math.min(page, totalPages - 1);
   const visible = filtered.slice(currentPage * 30, (currentPage + 1) * 30);
   const changeSort = (key: StatKey | "appearances") => {
-    setDescending(sortKey === key ? !descending : true);
+    setDescending(effectiveSortKey === key ? !descending : true);
     setSortKey(key);
     setPage(0);
   };
   const sortHeading = (key: StatKey | "appearances", label: string) => (
-    <th key={key} scope="col" aria-sort={sortKey === key ? (descending ? "descending" : "ascending") : "none"}>
-      <button type="button" onClick={() => changeSort(key)}>{label}<span aria-hidden="true">{sortKey === key ? (descending ? "↓" : "↑") : "↕"}</span></button>
+    <th key={key} scope="col" aria-sort={effectiveSortKey === key ? (descending ? "descending" : "ascending") : "none"}>
+      <button type="button" onClick={() => changeSort(key)}>{label}<span aria-hidden="true">{effectiveSortKey === key ? (descending ? "↓" : "↑") : "↕"}</span></button>
     </th>
   );
   return (
@@ -89,19 +98,19 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL 官方比赛数据</span></div>
       <div className="stats-toolbar">
         <label><span>搜索</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="球员或球队" /></label>
-        <label><span>联赛级别</span><select value={competition} onChange={(event) => { setCompetition(event.target.value); setPage(0); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
-        <label><span>位置</span><select value={position} onChange={(event) => { setPosition(event.target.value); setPage(0); }}><option value="ALL">全部</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</select></label>
-        <label><span>至少出场</span><select value={minimum} onChange={(event) => { setMinimum(Number(event.target.value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></select></label>
+        <label><span>联赛级别</span><FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setPage(0); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></FilterSelect></label>
+        <label><span>位置</span><FilterSelect value={position} onValueChange={(value) => { setPosition(value); setPage(0); }}><option value="ALL">全部</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</FilterSelect></label>
+        <label><span>至少出场</span><FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></FilterSelect></label>
         <span className="stats-count">{filtered.length} 人</span>
       </div>
       <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
-          <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{statColumns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{statColumns.map(({ key }) => <td key={key} className={player.perGame[key] === 0 ? "stats-zero" : undefined}>{player.perGame[key] === 0 ? "—" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置不适用" : undefined}>{!applicableStat(key, player.position) ? "" : player.perGame[key] === 0 ? "—" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
-      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数；— = 真实零次</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
+      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数；— = 真实零次；空白 = 该位置不适用</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
     </section>
   );
 }
@@ -114,7 +123,7 @@ function chartDomain(values: number[], includeZero = false): [number, number] {
   if (!values.length) return [0, 1];
   const low = Math.min(...values), high = Math.max(...values);
   const padding = Math.max(0.08, (high - low) * 0.14);
-  const minimum = includeZero ? 0 : Math.max(0, Math.floor((low - padding) * 10) / 10);
+  const minimum = includeZero ? Math.min(0, Math.floor(low * 10) / 10) : (low >= 0 ? Math.max(0, Math.floor((low - padding) * 10) / 10) : Math.floor((low - padding) * 10) / 10);
   const maximum = Math.ceil((high + padding) * 10) / 10;
   return [minimum, Math.max(minimum + 0.2, maximum)];
 }
@@ -127,27 +136,51 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   const [hovered, setHovered] = useState<string | null>(null);
   const [xKey, setXKey] = useState("xgPerGame");
   const [yKey, setYKey] = useState("xgaPerGame");
-  const metrics = mode === "team" ? [{key:"xgPerGame",label:"预期进球 · xG / 场"},{key:"xgaPerGame",label:"预期失球 · xGA / 场"},{key:"goalsPerGame",label:"进球 / 场"},{key:"winRate",label:"胜率 · %"},{key:"cleanSheetRate",label:"零封率 · %"},{key:"pointsPerGame",label:"联赛积分 / 场"}] : [{key:"xg90",label:"预期进球 / 90"},{key:"goals90",label:"实际进球 / 90"},{key:"ownership",label:"持有率 · %"},{key:"appearances",label:"出场次数"}, ...statColumns.map(({key,label})=>({key,label:label+" / 场"}))];
-  const xLabel = metrics.find(m=>m.key===xKey)?.label ?? xKey;
-  const yLabel = metrics.find(m=>m.key===yKey)?.label ?? yKey;
+  const metrics = mode === "team" ? [
+    {key:"xgPerGame",label:"预期进球 · xG / 场",group:"预期表现"},
+    {key:"xgaPerGame",label:"预期失球 · xGA / 场",group:"预期表现"},
+    {key:"xgdPerGame",label:"预期净胜球 · xGD / 场",group:"预期表现"},
+    {key:"xgShare",label:"预期进球占比 · %",group:"预期表现"},
+    {key:"xptsPerGame",label:"预期积分 · xPts / 场",group:"预期表现"},
+    {key:"pointsDeltaPerGame",label:"积分超预期 / 场",group:"实际与预期偏差"},
+    {key:"finishingDeltaPerGame",label:"进球超预期 / 场",group:"实际与预期偏差"},
+    {key:"goalsPerGame",label:"进球 / 场",group:"比赛结果"},
+    {key:"winRate",label:"胜率 · %",group:"比赛结果"},
+    {key:"cleanSheetRate",label:"零封率 · %",group:"比赛结果"},
+    {key:"pointsPerGame",label:"联赛积分 / 场",group:"比赛结果"},
+  ] : [
+    ...(position !== "GK" ? [{key:"xg90",label:"预期进球 / 90",group:"预期与效率"},{key:"goals90",label:"实际进球 / 90",group:"预期与效率"},{key:"goalInvolvements90",label:"进球 + 助攻 / 90",group:"预期与效率"},{key:"keyPasses90",label:"关键传球 / 90",group:"预期与效率"},{key:"shotsOnTarget90",label:"射正 / 90",group:"预期与效率"},{key:"defensiveActions90",label:"防守动作 / 90",group:"预期与效率"}] : [{key:"saveRate",label:"扑救率 · %",group:"门将效率"}]),
+    {key:"ownership",label:"持有率 · %",group:"样本与热度"},{key:"appearances",label:"出场次数",group:"样本与热度"},
+    ...statColumns.filter(({key})=>position === "ALL" || applicableStat(key, position === "ATT" ? "MID" : position)).map(({key,label})=>({key,label:label+" / 场",group:keeperOnly.has(key)?"门将动作":"基础场均"}))];
+  const activeXKey = metrics.some(m=>m.key===xKey) ? xKey : "points";
+  const activeYKey = metrics.some(m=>m.key===yKey) ? yKey : "minutesPlayed";
+  const xLabel = metrics.find(m=>m.key===activeXKey)?.label ?? activeXKey;
+  const yLabel = metrics.find(m=>m.key===activeYKey)?.label ?? activeYKey;
   const lowerBetter = (key: string) => ["xgaPerGame","goalsConceded","yellowCards","redCards","ownGoals","penaltyMisses"].includes(key);
   const valueFor = (row: TeamStat | PlayerStat, key: string): number | null => {
+    if ("perGame" in row) {
+      const stats = row.perGame;
+      if (key in stats && !applicableStat(key as StatKey, row.position)) return null;
+      const per90: Record<string, number> = {goalInvolvements90: stats.goalsScored + stats.assists, keyPasses90: stats.keyPasses, shotsOnTarget90: stats.shotsOnTarget, defensiveActions90: stats.clearances + stats.blocks + stats.tackles + stats.interceptions};
+      if (key in per90) return row.position !== "GK" && stats.minutesPlayed > 0 ? per90[key] * 90 / stats.minutesPlayed : null;
+      if (key === "saveRate") return row.position === "GK" && stats.saves + stats.goalsConceded > 0 ? 100 * stats.saves / (stats.saves + stats.goalsConceded) : null;
+    }
     const value = "perGame" in row && key in row.perGame ? row.perGame[key as StatKey] : (row as unknown as Record<string, unknown>)[key];
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   };
-  const candidates = mode === "team" ? teams.filter(t=>competition==="ALL" || t.competitionId===Number(competition)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && (![xKey,yKey].includes("xg90") || (p.xgMinutes != null && p.xgMinutes>=minimum)) && (competition==="ALL" || p.competitionId===Number(competition)) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
+  const candidates = mode === "team" ? teams.filter(t=>competition==="ALL" || t.competitionId===Number(competition)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && (![activeXKey,activeYKey].includes("xg90") || (p.xgMinutes != null && p.xgMinutes>=minimum)) && (competition==="ALL" || p.competitionId===Number(competition)) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
   const dots: AnalyticsDatum[] = candidates.flatMap(row=>{
-    const xv=valueFor(row,xKey), yv=valueFor(row,yKey); if(xv==null || yv==null) return [];
+    const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
     return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
   });
   const selected = dots.find(d=>d.id===hovered);
-  const comparison = mode==="player" && xKey==="xg90" && yKey==="goals90";
+  const comparison = mode==="player" && activeXKey==="xg90" && activeYKey==="goals90";
   const playerMaximum=Math.max(0.5,Math.ceil(Math.max(...dots.flatMap(d=>[d.x,d.y]),0)*10)/10);
   const xDomain: [number,number] = comparison ? [0,playerMaximum] : chartDomain(dots.map(d=>d.x));
   const yDomain: [number,number] = comparison ? [0,playerMaximum] : chartDomain(dots.map(d=>d.y));
   const left = 76, top = 52, size = 686, right = left + size, bottom = top + size;
-  const x = (value: number) => left + (lowerBetter(xKey) ? 1 - (value - xDomain[0]) / (xDomain[1] - xDomain[0]) : (value - xDomain[0]) / (xDomain[1] - xDomain[0])) * size;
-  const y = (value: number) => lowerBetter(yKey)
+  const x = (value: number) => left + (lowerBetter(activeXKey) ? 1 - (value - xDomain[0]) / (xDomain[1] - xDomain[0]) : (value - xDomain[0]) / (xDomain[1] - xDomain[0])) * size;
+  const y = (value: number) => lowerBetter(activeYKey)
     ? top + (value - yDomain[0]) / (yDomain[1] - yDomain[0]) * size
     : bottom - (value - yDomain[0]) / (yDomain[1] - yDomain[0]) * size;
   const labels: { id: string; name: string; x: number; y: number; box: { x: number; y: number; width: number; height: number } }[] = [];
@@ -182,13 +215,14 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           <strong>{mode === "team" ? "球队" : "球员"}</strong>
           <button type="button" onClick={() => changeMode("player")} disabled={mode === "player"} aria-label="切换到球员">›</button>
         </div>
-        {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><select aria-label={label+"数据"} value={index===0?xKey:yKey} onChange={e=>{(index===0?setXKey:setYKey)(e.target.value);setHovered(null);}}>{metrics.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select></label>)}
+        {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><FilterSelect aria-label={label+"数据"} value={index===0?activeXKey:activeYKey} onValueChange={value=>{(index===0?setXKey:setYKey)(value);setHovered(null);}}>{metrics.map(m=><option key={m.key} value={m.key} data-group={m.group}>{m.label}</option>)}</FilterSelect></label>)}
         <div className="chart-controls">
-          <label>联赛级别<select value={competition} onChange={(event) => { setCompetition(event.target.value); setHovered(null); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></select></label>
-          {mode === "player" && <><label>位置<select value={position} onChange={(event) => { setPosition(event.target.value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></select></label><label>至少出场<select value={minimum} onChange={(event) => { setMinimum(Number(event.target.value)); setHovered(null); }}><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></select></label></>}
+          <label>联赛级别<FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setHovered(null); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></FilterSelect></label>
+          {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
         <div className="analytics-count">{dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
-        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{formatUpdated(xgUpdatedAt)}<br />每小时尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；缺失不计作零。失球、牌数等指标越低越优，坐标自动反向。</p>
+        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{formatUpdated(xgUpdatedAt)}<br />每小时尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
+        <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
         <div className="analytics-visual-heading"><strong>{xLabel+" × "+yLabel}</strong><span>{comparison?"虚线：实际进球 = xG":"虚线：当前样本均值"}</span></div>
@@ -198,7 +232,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
             const yv = yDomain[0] + fraction * (yDomain[1] - yDomain[0]);
             return <g key={fraction}><line className="chart-grid" x1={x(xv)} x2={x(xv)} y1={top} y2={bottom} /><line className="chart-grid" x1={left} x2={right} y1={y(yv)} y2={y(yv)} /><text className="chart-tick" x={x(xv)} y={bottom + 24} textAnchor="middle">{xv.toFixed(1)}</text><text className="chart-tick" x={left - 12} y={y(yv) + 4} textAnchor="end">{yv.toFixed(1)}</text></g>;
           })}
-          {!comparison ? <><line className="chart-midline" x1={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} x2={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} y2={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">{xKey==="xgPerGame" && yKey==="xgaPerGame" ? "攻强 · 守强" : ""}</text></> : <><line className="chart-midline" x1={x(0)} y1={y(0)} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
+          {!comparison ? <><line className="chart-midline" x1={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} x2={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} y2={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">{activeXKey==="xgPerGame" && activeYKey==="xgaPerGame" ? "攻强 · 守强" : ""}</text></> : <><line className="chart-midline" x1={x(0)} y1={y(0)} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
           <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={11} /></clipPath>)}</defs>
           {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + (hovered === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(datum.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(datum.id); } }}>
             <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={12} />
@@ -207,8 +241,8 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           </g>)}
           {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
           {selected && <g className="chart-tooltip" transform={"translate(" + tooltipX + " " + tooltipY + ")"}><rect width={282} height={88} rx={9} /><text className="chart-tooltip-name" x={11} y={22}>{selected.name}</text><text x={11} y={43}>{selected.subtitle}</text><text x={11} y={65}>{selected.detail}</text></g>}
-          <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{xLabel+(lowerBetter(xKey)?"（向右越低）":" →")}</text>
-          <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{yLabel+(lowerBetter(yKey)?"（向上越低）":" ↑")}</text>
+          <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{xLabel+(lowerBetter(activeXKey)?"（向右越低）":" →")}</text>
+          <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{yLabel+(lowerBetter(activeYKey)?"（向上越低）":" ↑")}</text>
         </svg>{!dots.length && <p className="stats-empty">当前筛选无可用数据，请更换指标或降低出场门槛。</p>}</div>
       </div>
     </div>

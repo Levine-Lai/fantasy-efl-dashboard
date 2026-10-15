@@ -31,7 +31,7 @@ try {
       apps: row.apps,
       xg: row.xg,
       minutes: row.minutes,
-    })), teams: teamPage.rows.map((row) => ({ competitionId, team_name: row.team_name, played: row.played, xg_per_game: row.xg_per_game, xga_per_game: row.xga_per_game })) };
+    })), teams: teamPage.rows.map((row) => ({ competitionId, team_name: row.team_name, played: row.played, xg_per_game: row.xg_per_game, xga_per_game: row.xga_per_game, xgd: row.xgd, xpts: row.xpts, points_delta: row.points_delta, goals_for: row.goals_for, xg: row.xg })) };
   }));
   const snapshot = { season, capturedAt: now.toISOString(), players: results.flatMap((result) => result.players), teams: results.flatMap((result) => result.teams) };
   await mkdir(new URL("../data/", import.meta.url), { recursive: true });
