@@ -295,7 +295,7 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     const fdr = homeGames ? squad.fdrHome ?? 3 : squad.fdrAway ?? 3;
     const score = teamFixtures.length * 6 + agg.wins / Math.max(1, agg.games) * 5 + agg.cleanSheets / Math.max(1, agg.games) * 4 + agg.goals / Math.max(1, agg.games) * 1.5 + (6 - fdr) * 0.8;
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: (squad.last3Form ?? []).slice(-3), score: Number(score.toFixed(1)) };
-  }).sort((a, b) => b.score - a.score).slice(0, 5);
+  }).sort((a, b) => b.score - a.score).slice(0, 12);
   return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 9 }, picks, startingSeven, playerStats, teamStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }
 

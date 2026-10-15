@@ -114,11 +114,11 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置不适用" : undefined}>{!applicableStat(key, player.position) ? "" : player.perGame[key] === 0 ? "—" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><strong>{player.fullName}</strong><small>{player.team}</small></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
-      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数；— = 真实零次；空白 = 该位置不适用</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
+      <div className="stats-footer"><span>场均 = 已完成比赛累计 ÷ 出场次数；0.0 = 零值或该位置未统计</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {totalPages}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
     </section>
   );
 }
@@ -338,7 +338,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
         <section className="lower-grid">
           <div className="panel" id="clubs">
-            <div className="section-heading"><div><Trophy size={18} /><h2>球队选择</h2></div><span>前五</span></div>
+            <div className="section-heading"><div><Trophy size={18} /><h2>球队选择</h2></div><span>前 {active.teams.length} 队</span></div>
             <div className="club-list">
               {active.teams.map((team, index) => (
                 <article className="club-row" key={team.id}>
