@@ -5,4 +5,5 @@ import data from "./dashboard.json";
 import "../app/globals.css";
 import type { DashboardData } from "../lib/dashboard-data";
 
-createRoot(document.getElementById("root")!).render(<Dashboard data={data as DashboardData} />);
+if (location.hash === "#personal") location.replace(new URL("./personal.html", location.href).href);
+else createRoot(document.getElementById("root")!).render(<Dashboard data={data as DashboardData} />);

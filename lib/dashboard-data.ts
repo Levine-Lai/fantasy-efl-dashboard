@@ -9,7 +9,7 @@ type RawRound = { id: number; name: string; status: string; lockoutDate: string;
 export const statKeys = ["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "cleanSheet", "saves", "penaltySaves", "goalsConceded", "clearances", "blocks", "tackles", "interceptions", "yellowCards", "redCards", "ownGoals", "penaltyMisses", "hatTricks"] as const;
 export type StatKey = typeof statKeys[number];
 type LivePlayer = { playerId: number; gameId: number; squadId: number } & Partial<Record<StatKey, number>>;
-type LiveSquad = { squadId: number; gameId: number; win: number; draw: number; awayWin: number; cleanSheet: number; goalsScored: number };
+type LiveSquad = { points?: number; squadId: number; gameId: number; win: number; draw: number; awayWin: number; cleanSheet: number; goalsScored: number };
 type LiveRound = { players: LivePlayer[]; squads: LiveSquad[] };
 
 const componentKeys = ["attackActions", "defenseActions", "goals", "assists", "cleanSheet", "other"] as const;
@@ -59,7 +59,7 @@ export function projectTeamMatch({rank,opponentRank,own,opposing,league,home,win
 export type FixtureBadge = { label: string; opponent: string; opponentLogo: string };
 export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; fixtureBadges: FixtureBadge[]; reliability: number; expectedMinutes: number; score: number; matchup: number; actionScore: number; returnScore: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
 export type PlayerStat = { id: number; fullName: string; team: string; jerseyUrl: string; teamLogo: string; advanced?: { updatedAt: string; mins: number; apps: number; tkl: number | null; int: number | null; aer: number | null; due: number | null; duw: number | null; pas: number | null; apas: number | null; drp: number | null; cc: number | null; sdrb: number | null }; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; goals90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
-export type TeamStat = { id: number; name: string; fullName: string; logo: string; competitionId: number; played: number; xgPerGame: number | null; xgaPerGame: number | null; goalsPerGame: number | null; winRate: number | null; cleanSheetRate: number | null; pointsPerGame: number | null; xgdPerGame: number | null; xgShare: number | null; xptsPerGame: number | null; pointsDeltaPerGame: number | null; finishingDeltaPerGame: number | null };
+export type TeamStat = { id: number; name: string; fullName: string; logo: string; competitionId: number; played: number; fantasyPointsPerGame: number | null; goalsAgainstPerGame: number | null; xgPerGame: number | null; xgaPerGame: number | null; goalsPerGame: number | null; winRate: number | null; cleanSheetRate: number | null; pointsPerGame: number | null; xgdPerGame: number | null; xgShare: number | null; xptsPerGame: number | null; pointsDeltaPerGame: number | null; finishingDeltaPerGame: number | null };
 export type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; fixtureBadges: FixtureBadge[]; form: string[]; score: number; leaguePosition: number | null; projectedXg: number | null; projectedXga: number | null };
 export type NewsItem = { title: string; url: string; source: string; date: string; titleZh?: string; summary?: string; category?: string; impacts?: {kind:"positive"|"negative"|"injury"|"watch";text:string}[] };
 export type DashboardMeta = { roundId: number; roundName: string; lockoutAt: string; fixtureCount: number; doubleTeams: number; completedRounds: number; recentRoundName: string; recentFinalizedGames: number; recentTotalGames: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number };
@@ -198,7 +198,7 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
   });
 
   const teamGames = new Map<number, Set<number>>();
-  const teamAgg = new Map<number, { games: number; wins: number; draws: number; cleanSheets: number; goals: number }>();
+  const teamAgg = new Map<number, { games: number; wins: number; draws: number; cleanSheets: number; goals: number; fantasyPoints:number; conceded:number }>();
   const playerAgg = new Map<number, { games: number; minutes: number; sixty: number; points: number; goals: number; assists: number; saves: number; cleanSheets: number; clearances: number; blocks: number; tackles: number; interceptions: number; keyPasses: number; shotsOnTarget: number }>();
   const playerEventTotals = new Map<number, { games: number; totals: Record<StatKey, number> }>();
   const componentsByPlayer = new Map<number, ScoreComponents>();
@@ -207,8 +207,8 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
   for (const live of lives) {
     for (const row of live.squads) {
       const seen = teamGames.get(row.squadId) ?? new Set<number>(); seen.add(row.gameId); teamGames.set(row.squadId, seen);
-      const agg = teamAgg.get(row.squadId) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
-      agg.games += 1; agg.wins += row.win; agg.draws += row.draw; agg.cleanSheets += row.cleanSheet; agg.goals += row.goalsScored; teamAgg.set(row.squadId, agg);
+      const agg = teamAgg.get(row.squadId) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0, fantasyPoints:0, conceded:0 };
+      agg.games += 1; agg.wins += row.win; agg.draws += row.draw; agg.cleanSheets += row.cleanSheet; agg.goals += row.goalsScored; agg.fantasyPoints += row.points ?? 0; agg.conceded += live.squads.find(opponent=>opponent.gameId===row.gameId && opponent.squadId!==row.squadId)?.goalsScored ?? 0; teamAgg.set(row.squadId, agg);
     }
     for (const row of live.players) {
       const position = playerPositions.get(row.playerId);
@@ -303,10 +303,10 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     const agg=teamAgg.get(squad.id);
     const rate=(value: number | undefined, scale=1)=>agg?.games && value!=null ? value/agg.games*scale : null;
     const sourceRate = (value: number | undefined) => row?.played && value != null && Number.isFinite(value) ? value / row.played : null;
-    return {xgdPerGame: sourceRate(row?.xgd), xptsPerGame: sourceRate(row?.xpts), pointsDeltaPerGame: sourceRate(row?.points_delta), finishingDeltaPerGame: row?.goals_for != null && row.xg != null ? sourceRate(row.goals_for - row.xg) : null, xgShare: row && row.xg_per_game + row.xga_per_game > 0 ? 100 * row.xg_per_game / (row.xg_per_game + row.xga_per_game) : null, id:squad.id,name:squad.shortName || squad.name,fullName:squad.name,logo:squad.lightBadge || squad.darkBadge || "",competitionId:squad.competitionId,played:agg?.games ?? 0,xgPerGame:row?.played ? row.xg_per_game : null,xgaPerGame:row?.played ? row.xga_per_game : null,goalsPerGame:rate(agg?.goals),winRate:rate(agg?.wins,100),cleanSheetRate:rate(agg?.cleanSheets,100),pointsPerGame:agg ? rate(agg.wins*3+agg.draws) : null};
+    return {xgdPerGame: sourceRate(row?.xgd), xptsPerGame: sourceRate(row?.xpts), pointsDeltaPerGame: sourceRate(row?.points_delta), finishingDeltaPerGame: row?.goals_for != null && row.xg != null ? sourceRate(row.goals_for - row.xg) : null, xgShare: row && row.xg_per_game + row.xga_per_game > 0 ? 100 * row.xg_per_game / (row.xg_per_game + row.xga_per_game) : null, id:squad.id,name:squad.shortName || squad.name,fullName:squad.name,logo:squad.lightBadge || squad.darkBadge || "",competitionId:squad.competitionId,played:agg?.games ?? 0,fantasyPointsPerGame:rate(agg?.fantasyPoints),goalsAgainstPerGame:rate(agg?.conceded),xgPerGame:row?.played ? row.xg_per_game : null,xgaPerGame:row?.played ? row.xga_per_game : null,goalsPerGame:rate(agg?.goals),winRate:rate(agg?.wins,100),cleanSheetRate:rate(agg?.cleanSheets,100),pointsPerGame:agg ? rate(agg.wins*3+agg.draws) : null};
   });
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
-    const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };
+    const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0, fantasyPoints:0, conceded:0 };
     const teamFixtures = fixtures.get(squad.id)!;
     const own = xgData.teamRows.get(`${squad.competitionId}:${matchKey(squad.name)}`);
     const league = xgData.leagueAverages.get(squad.competitionId);

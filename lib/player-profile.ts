@@ -39,6 +39,10 @@ export function tint(percentile:number|null) {
 // Profile bars use a distinct stronger palette; table cells retain tint().
 export function profileTone(percentile:number|null) {
   if(percentile==null) return {fill:'#e8ecef',marker:'#f5f7f8'};
-  const hue=Math.max(0,Math.min(100,percentile))*1.3;
-  return {fill:`hsl(${hue} 40% 55%)`,marker:`hsl(${hue} 38% 92%)`};
+  const p=Math.max(0,Math.min(100,percentile));
+  const stops=[[0,4],[25,12],[50,42],[70,58],[85,108],[100,132]];
+  const index=stops.findIndex(([limit])=>p<=limit);
+  const [low,high]=index<=0?[stops[0],stops[1]]:[stops[index-1],stops[index]];
+  const hue=low[1]+(high[1]-low[1])*(p-low[0])/(high[0]-low[0]);
+  return {fill:`hsl(${hue} 56% 53%)`,marker:`hsl(${hue} 38% 92%)`};
 }

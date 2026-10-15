@@ -465,3 +465,7 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
 .percentile-fill { border:none; }
 .percentile-marker { border-width:2px; box-shadow:0 3px 8px #1232; }
 @media(max-width:700px) { .personal-search { max-width:none; } .personal-team { flex:1; } .personal-search input { width:100%; } }
+
+.team-stats-panel { margin-top:24px; scroll-margin-top:85px; }
+.personal-page-shell .personal-panel { margin-top:0; }
+.topbar nav a[aria-current=page] { text-decoration:underline; text-underline-offset:7px; }

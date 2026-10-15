@@ -32,3 +32,16 @@ for(const p of data.playerStats) {
 assert.deepEqual(Object.values(profileMetrics).map(rows=>rows.length),[5,14,14,6]);
 assert.ok(data.teams.every(t=>(t.leaguePosition==null || t.leaguePosition>=1 && t.leaguePosition<=24) && (t.projectedXg==null || t.projectedXg>0) && (t.projectedXga==null || t.projectedXga>0)));
 console.log('Personal data checks passed: ties, reversed rankings, missing values, subtle tints, model monotonicity, source alignment and all position metrics');
+
+assert.equal(new Set(data.teamStats.map(t=>t.id)).size,72);
+for(const t of data.teamStats.filter(t=>t.played>0)) {
+ assert.ok(Number.isFinite(t.fantasyPointsPerGame));
+ assert.ok(Number.isFinite(t.goalsAgainstPerGame) && t.goalsAgainstPerGame>=0);
+}
+for(const league of [10,11,12]) {
+ const teams=data.teamStats.filter(t=>t.competitionId===league);
+ const scored=teams.reduce((sum,t)=>sum+(t.goalsPerGame??0)*t.played,0);
+ const conceded=teams.reduce((sum,t)=>sum+(t.goalsAgainstPerGame??0)*t.played,0);
+ assert.ok(Math.abs(scored-conceded)<1e-6,'Every league goal must also be conceded by an opponent');
+}
+console.log('Team aggregates passed: 72 unique clubs, finite per-game values and balanced league goals');

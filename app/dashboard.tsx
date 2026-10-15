@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
-import { PersonalData } from "./personal-data";
+import { TeamStatsTable } from "./team-stats-table";
 import { ranking, tint } from "@/lib/player-profile";
 import { leagueOptions, includesLeague, leagueLabel } from "@/lib/league-selection";
 import { chartDomain, formatChartTick } from "@/lib/chart-scale";
@@ -73,7 +73,7 @@ function applicableStat(key: StatKey, position: string) {
   return positionStats[position]?.has(key) ?? false;
 }
 
-function StatsTable({ players, onSelect }: { players: PlayerStat[]; onSelect:(id:number)=>void }) {
+function StatsTable({ players }: { players: PlayerStat[] }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
   const [position, setPosition] = useState("OUT");
@@ -129,7 +129,7 @@ function StatsTable({ players, onSelect }: { players: PlayerStat[]; onSelect:(id
       <div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href="#personal" onClick={()=>onSelect(player.id)} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href={`./personal.html?player=${player.id}`} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
@@ -244,7 +244,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
         <div className="analytics-count">{dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
-        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{formatUpdated(xgUpdatedAt)}<br />每小时尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
+        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{formatUpdated(xgUpdatedAt)}<br />每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
         <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
@@ -293,7 +293,6 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
 }
 
 export function Dashboard({ data }: { data: DashboardData }) {
-  const [profilePlayerId,setProfilePlayerId]=useState<number|null>(null);
   const [playerQuery, setPlayerQuery] = useState("");
   const [rankPosition, setRankPosition] = useState<typeof positions[number]>("GK");
   const [rankPage, setRankPage] = useState(0);
@@ -310,7 +309,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="./official-fantasy-efl.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a>
-        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="#personal">个人数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
+        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="./personal.html">个人数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
       </header>
 
       <div className="dashboard-shell" id="top">
@@ -350,8 +349,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
         <OpportunityChart players={data.playerStats} teams={data.teamStats} xgUpdatedAt={data.meta.xgUpdatedAt} officialUpdatedAt={data.meta.updatedAt} />
 
-        <StatsTable players={data.playerStats} onSelect={setProfilePlayerId} />
-        <PersonalData players={data.playerStats} selectedId={profilePlayerId} onSelect={setProfilePlayerId} officialUpdatedAt={data.meta.updatedAt} xgUpdatedAt={data.meta.xgUpdatedAt} />
+        <StatsTable players={data.playerStats} />
+        <TeamStatsTable teams={data.teamStats} />
 
         <section className="lower-grid">
           <div className="panel" id="clubs">
