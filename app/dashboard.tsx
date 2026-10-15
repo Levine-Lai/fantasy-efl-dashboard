@@ -309,7 +309,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="https://fantasy.efl.com/apple-touch-icon.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a>
+        <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="./official-fantasy-efl.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a>
         <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="#personal">个人数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
       </header>
 

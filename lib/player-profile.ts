@@ -35,3 +35,10 @@ export function tint(percentile:number|null) {
   const weight=Math.min(1,Math.abs(percentile-50)/50);
   return `rgb(${endpoint.map(v=>Math.round(255+(v-255)*weight)).join(',')})`;
 }
+
+// Profile bars use a distinct stronger palette; table cells retain tint().
+export function profileTone(percentile:number|null) {
+  if(percentile==null) return {fill:'#e8ecef',marker:'#f5f7f8'};
+  const hue=Math.max(0,Math.min(100,percentile))*1.3;
+  return {fill:`hsl(${hue} 40% 55%)`,marker:`hsl(${hue} 38% 92%)`};
+}
