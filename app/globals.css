@@ -269,3 +269,5 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .club-row { grid-template-columns: 28px 34px minmax(0, 1fr) 48px; }
   .club-logo { width: 30px; height: 30px; }
 }
+
+.analytics-metric select { width:100%; min-width:0; padding:7px 2px; border:0; background:transparent; color:var(--prussian); font:inherit; font-size:12px; font-weight:700; }

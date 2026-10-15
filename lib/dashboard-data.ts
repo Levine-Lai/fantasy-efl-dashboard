@@ -46,7 +46,7 @@ export function blendXgGoalPoints(baseGoals: number, xg: number | null, xgMinute
 export type FixtureBadge = { label: string; opponent: string; opponentLogo: string };
 export type PlayerPick = { id: number; name: string; fullName: string; team: string; position: Position; ownership: number; fixtures: string[]; fixtureBadges: FixtureBadge[]; reliability: number; expectedMinutes: number; score: number; matchup: number; actionScore: number; returnScore: number; points: number; minutes: number; avatarUrl: string; teamLogo: string; fallbackImage: string };
 export type PlayerStat = { id: number; fullName: string; team: string; jerseyUrl: string; competitionId: number; position: Position; appearances: number; ownership: number; xg: number | null; xg90: number | null; xgMinutes: number | null; goals90: number | null; seasonGoals: number | null; perGame: Record<StatKey, number> };
-export type TeamStat = { id: number; name: string; fullName: string; logo: string; competitionId: number; played: number; xgPerGame: number; xgaPerGame: number };
+export type TeamStat = { id: number; name: string; fullName: string; logo: string; competitionId: number; played: number; xgPerGame: number | null; xgaPerGame: number | null; goalsPerGame: number | null; winRate: number | null; cleanSheetRate: number | null; pointsPerGame: number | null };
 export type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; fixtureBadges: FixtureBadge[]; form: string[]; score: number };
 type NewsItem = { title: string; url: string; source: string; date: string };
 export type DashboardMeta = { roundId: number; roundName: string; lockoutAt: string; fixtureCount: number; doubleTeams: number; completedRounds: number; recentRoundName: string; recentFinalizedGames: number; recentTotalGames: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number };
@@ -262,16 +262,15 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     const squad = squadsById.get(player.squadId);
     const sourceXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
     const xg = sourceXg?.apps === player.appearances ? sourceXg : undefined;
-    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, goals90: xg ? Number((events.totals.goalsScored * 90 / xg.minutes).toFixed(3)) : null, seasonGoals: xg ? events.totals.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
+    return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, goals90: events.totals.minutesPlayed > 0 ? Number((events.totals.goalsScored * 90 / events.totals.minutesPlayed).toFixed(3)) : null, seasonGoals: xg ? events.totals.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, Number((events.totals[key] / events.games).toFixed(3))])) as Record<StatKey, number> }];
   });
   const squadByName = new Map(squads.map((squad) => [`${squad.competitionId}:${matchKey(squad.name)}`, squad]));
   const teamAliases: Record<string, string> = { miltonkeynesdons: "mkdons" };
-  const teamStats: TeamStat[] = (snapshot?.teams ?? []).flatMap((row) => {
-    if (!Number.isFinite(row.xg_per_game) || !Number.isFinite(row.xga_per_game) || row.played <= 0) return [];
-    const key = matchKey(row.team_name);
-    const squad = squadByName.get(`${row.competitionId}:${teamAliases[key] ?? key}`);
-    if (!squad) return [];
-    return [{ id: squad.id, name: squad.shortName || squad.name, fullName: row.team_name, logo: squad.lightBadge || squad.darkBadge || "", competitionId: row.competitionId, played: row.played, xgPerGame: row.xg_per_game, xgaPerGame: row.xga_per_game }];
+  const teamStats: TeamStat[] = squads.map(squad=>{
+    const row=(snapshot?.teams ?? []).find(item=>item.competitionId===squad.competitionId && (teamAliases[matchKey(item.team_name)] ?? matchKey(item.team_name))===matchKey(squad.name));
+    const agg=teamAgg.get(squad.id);
+    const rate=(value: number | undefined, scale=1)=>agg?.games && value!=null ? value/agg.games*scale : null;
+    return {id:squad.id,name:squad.shortName || squad.name,fullName:squad.name,logo:squad.lightBadge || squad.darkBadge || "",competitionId:squad.competitionId,played:agg?.games ?? 0,xgPerGame:row?.played ? row.xg_per_game : null,xgaPerGame:row?.played ? row.xga_per_game : null,goalsPerGame:rate(agg?.goals),winRate:rate(agg?.wins,100),cleanSheetRate:rate(agg?.cleanSheets,100),pointsPerGame:agg ? rate(agg.wins*3+agg.draws) : null};
   });
   const teams: TeamPick[] = squads.filter((squad) => fixtures.has(squad.id)).map((squad) => {
     const agg = teamAgg.get(squad.id) ?? { games: 0, wins: 0, draws: 0, cleanSheets: 0, goals: 0 };

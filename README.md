@@ -1,5 +1,11 @@
 # Fantasy EFL 数据看板
 
-GitHub Pages 静态版。每天北京时间 08:00，GitHub Actions 从 Fantasy EFL 官方公开数据和 EFL 新闻重新生成页面。
+GitHub Pages 静态版。GitHub Actions 每小时第 17 分钟尝试抓取并重新发布；调度可能延迟，源站统计发布也可能滞后，不承诺直播实时。
 
-本地构建：`npm ci && npm run build`。生成结果位于 `pages-dist/`。
+可视化支持球队 6 项、球员 23 项指标自由组合。官方数据只统计已确认完赛；场均按实际出场次数计算。球员实际进球 / 90 使用官方累计分钟，xG / 90 使用 Statz 分钟；两源比赛覆盖可能有差异，出场数不匹配时不展示 xG。缺失值不计作零。
+
+来源：Fantasy EFL 官方公开 players / squads / rounds / live 数据；Statz 三个联赛球队和球员 xG 页面。球队胜率、零封率、场均积分由逐场官方数据计算。
+
+页面分别显示两类数据的成功抓取时间（北京时间），抓取时间不是源站统计截止时间。xG 抓取失败时保留旧快照及原时间；官方抓取失败则停止发布。
+
+本地构建：npm ci && npm run build。生成结果位于 pages-dist/。
