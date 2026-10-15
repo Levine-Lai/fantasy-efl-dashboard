@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { enrichNews } from "./enrich-news.mjs";
 import { cacheChartAssets } from "./cache-chart-assets.mjs";
 
 const sourceUrl = new URL("../lib/dashboard-data.ts", import.meta.url);
@@ -21,6 +22,6 @@ if (!roundsResponse.ok) throw new Error(`Fantasy EFL rounds: ${roundsResponse.st
 const { upcoming } = selectRecommendationRounds(await roundsResponse.json());
 const [data, next] = await Promise.all([calculateDashboard(snapshot), upcoming ? calculateDashboard(snapshot, upcoming.id) : Promise.resolve(null)]);
 if (next) data.upcomingRound = { meta: next.meta, picks: next.picks, startingSeven: next.startingSeven, teams: next.teams, differentialCount: next.differentialCount };
-await cacheChartAssets(data);
+await Promise.all([cacheChartAssets(data), enrichNews(data)]);
 await writeFile(outputUrl, `${JSON.stringify(data)}\n`, "utf8");
 console.log(`Generated ${data.meta.roundName}${next ? ` + ${next.meta.roundName}` : ""} at ${fileURLToPath(outputUrl)}`);

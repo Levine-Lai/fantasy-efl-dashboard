@@ -340,3 +340,38 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .analytics-visual-heading { flex-wrap: wrap; }
   .chart-heading-actions { width: 100%; justify-content: space-between; }
 }
+
+.chart-tooltip .tooltip-shell { fill: white; stroke: #b5ccd9; stroke-width: 1; filter: drop-shadow(0 4px 9px #00315318); }
+.chart-tooltip .chart-tooltip-name { font-size: 15px; font-weight: 750; }
+.chart-tooltip .tooltip-subtitle { fill: #648194; font-size: 11px; }
+.chart-tooltip .tooltip-metric-box { fill: #eef5f9; stroke: #dbe8ee; stroke-width: 1; }
+.chart-tooltip .tooltip-metric-label { fill: #5a7a8d; font-size: 10px; font-weight: 500; }
+.chart-tooltip .tooltip-metric-value { fill: #003153; font-size: 23px; font-weight: 800; }
+.ranking-pager { display: flex; align-items: center; gap: 9px; flex-shrink: 0; color: var(--prussian); }
+.ranking-pager button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--prussian); cursor: pointer; }
+.ranking-pager button:hover:not(:disabled) { background: var(--ice); }
+.ranking-pager button:disabled { opacity: .3; cursor: default; }
+.ranking-pager button:focus-visible { outline: 2px solid #7cabbf; outline-offset: 2px; }
+.ranking-pager > span { min-width: 85px; text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; }
+.ranking-pager small { font-size: 10px; color: #74909f; }
+.score { align-items: center; justify-content: center; padding: 7px 5px; border: 1px solid #d8e7ef; border-radius: 10px; background: #eff6fa; }
+.news-list { gap: 13px; }
+.news-card { padding: 16px; border: 1px solid #dce8ef; border-radius: 12px; background: #fcfdfe; }
+.news-card-meta { display: flex; align-items: center; gap: 8px; color: #718c9c; font-size: 11px; }
+.news-card-meta > span { padding: 3px 7px; border-radius: 5px; color: #456f85; background: #edf4f8; }
+.news-list .news-card-meta a { display: inline; min-height: 0; padding: 0; margin-left: auto; border: 0; color: #52768b; font-size: 11px; }
+.news-card h3 { color: var(--navy); font-size: 15px; line-height: 1.6; margin: 10px 0 7px; }
+.news-summary { margin: 0; color: #5d7685; font-size: 12px; line-height: 1.8; }
+.news-impacts { display: grid; gap: 8px; margin-top: 12px; }
+.news-impact { display: grid; grid-template-columns: 60px minmax(0,1fr); gap: 8px; align-items: start; }
+.news-impact > span { display: block; text-align: center; padding: 4px 3px; border-radius: 5px; font-size: 10px; color: #54778c; background: #edf4f8; }
+.news-impact-positive > span { color: #356f61; background: #e9f4ef; }
+.news-impact-negative > span, .news-impact-injury > span { color: #97664c; background: #faf0e8; }
+.news-impact p { margin: 2px 0 0; color: #365365; font-size: 12px; line-height: 1.75; }
+.news-analysis-note { display: block; margin-top: 12px; padding-top: 9px; border-top: 1px solid #e6edf2; color: #8a9da8; font-size: 10px; line-height: 1.6; }
+@media (max-width: 480px) {
+  .ranking-pager { gap: 4px; }
+  .ranking-pager > span { min-width: 67px; font-size: 11px; }
+  .ranking-pager button { width: 27px; height: 29px; }
+  .pool-toolbar input { width: min(180px, 45vw); }
+}

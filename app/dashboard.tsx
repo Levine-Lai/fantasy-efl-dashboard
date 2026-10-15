@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { leagueOptions, includesLeague, leagueLabel } from "@/lib/league-selection";
 import { chartDomain, formatChartTick } from "@/lib/chart-scale";
 import { exportChartPng } from "@/lib/export-chart";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -12,14 +13,16 @@ const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
 const competitionName: Record<number, string> = { 10: "英冠", 11: "英甲", 12: "英乙" };
 
+
+
 function labelFor(player: PlayerPick) {
   if (player.ownership <= 3) return "冷门";
   if (player.ownership >= 10) return "热门";
   return "平衡";
 }
 
-function RichImage({ src, fallback, alt, className }: { src: string; fallback?: string; alt: string; className: string }) {
-  return <img className={className} src={src || fallback} alt={alt} loading="lazy" onError={(event) => { if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback; else event.currentTarget.style.visibility = "hidden"; }} />;
+function RichImage({ src, fallback, alt, className, priority = false }: { src: string; fallback?: string; alt: string; className: string; priority?: boolean }) {
+  return <img className={className} src={src || fallback} alt={alt} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" onError={(event) => { if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback; else event.currentTarget.style.visibility = "hidden"; }} />;
 }
 
 function FixtureBadges({ fixtures }: { fixtures: FixtureBadge[] }) {
@@ -71,15 +74,15 @@ function applicableStat(key: StatKey, position: string) {
 function StatsTable({ players }: { players: PlayerStat[] }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
-  const [position, setPosition] = useState("ALL");
+  const [position, setPosition] = useState("OUT");
   const [minimum, setMinimum] = useState(3);
   const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
   const [descending, setDescending] = useState(true);
   const [page, setPage] = useState(0);
-  const columns = statColumns.filter(({ key }) => position === "ALL" || applicableStat(key, position));
+  const columns = statColumns.filter(({ key }) => position === "ALL" || (position === "OUT" ? !keeperOnly.has(key) : applicableStat(key, position)));
   const effectiveSortKey = sortKey === "appearances" || columns.some(column => column.key === sortKey) ? sortKey : "points";
   const filtered = useMemo(() => players
-    .filter((player) => player.appearances >= minimum && (competition === "ALL" || player.competitionId === Number(competition)) && (position === "ALL" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((player) => player.appearances >= minimum && includesLeague(competition, player.competitionId) && (position === "ALL" || position === "OUT" && player.position !== "GK" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
       const left = effectiveSortKey === "appearances" ? a.appearances : a.perGame[effectiveSortKey];
       const right = effectiveSortKey === "appearances" ? b.appearances : b.perGame[effectiveSortKey];
@@ -103,8 +106,8 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL 官方比赛数据</span></div>
       <div className="stats-toolbar">
         <label><span>搜索</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="球员或球队" /></label>
-        <label><span>联赛级别</span><FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setPage(0); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></FilterSelect></label>
-        <label><span>位置</span><FilterSelect value={position} onValueChange={(value) => { setPosition(value); setPage(0); }}><option value="ALL">全部</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</FilterSelect></label>
+        <label><span>联赛级别</span><FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setPage(0); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
+        <label><span>位置</span><FilterSelect value={position} onValueChange={(value) => { setPosition(value); setPage(0); }}><option value="OUT">非门将</option><option value="ALL">全部位置</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</FilterSelect></label>
         <label><span>至少出场</span><FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></FilterSelect></label>
         <span className="stats-count">{filtered.length} 人</span>
       </div>
@@ -130,6 +133,13 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   const [position, setPosition] = useState("ATT");
   const [minimum, setMinimum] = useState(450);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [loadChartImages, setLoadChartImages] = useState(false);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || typeof IntersectionObserver === "undefined") { setLoadChartImages(true); return; }
+    const observer = new IntersectionObserver(entries => { if (entries.some(entry=>entry.isIntersecting)) { setLoadChartImages(true); observer.disconnect(); } }, {rootMargin:"250px"});
+    observer.observe(svg); return ()=>observer.disconnect();
+  }, []);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
   const [hovered, setHovered] = useState<string | null>(null);
@@ -167,7 +177,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
     const value = "perGame" in row && key in row.perGame ? row.perGame[key as StatKey] : (row as unknown as Record<string, unknown>)[key];
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   };
-  const candidates = mode === "team" ? teams.filter(t=>competition==="ALL" || t.competitionId===Number(competition)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && (competition==="ALL" || p.competitionId===Number(competition)) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
+  const candidates = mode === "team" ? teams.filter(t=>includesLeague(competition,t.competitionId)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && includesLeague(competition,p.competitionId) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
   const dots: AnalyticsDatum[] = candidates.flatMap(row=>{
     const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
     return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
@@ -200,8 +210,8 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
       break;
     }
   }
-  const tooltipX = selected ? Math.min(right - 282, Math.max(left, x(selected.x) + 18)) : 0;
-  const tooltipY = selected ? Math.min(bottom - 88, Math.max(top, y(selected.y) - 94)) : 0;
+  const tooltipX = selected ? Math.min(right - 310, Math.max(left, x(selected.x) + 18)) : 0;
+  const tooltipY = selected ? Math.min(bottom - 140, Math.max(top, y(selected.y) - 148)) : 0;
   const statzCompetition = competition === "11" ? "league-one" : competition === "12" ? "league-two" : "championship";
   const statzUrl = `https://statz.ai/competitions/${statzCompetition}/xg${mode === "player" ? "/players" : ""}`;
   const changeMode = (value: "team" | "player") => { setMode(value); setXKey(value === "team" ? "xgPerGame" : "xg90"); setYKey(value === "team" ? "xgaPerGame" : "goals90"); setHovered(null); };
@@ -215,7 +225,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
         </div>
         {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><FilterSelect aria-label={label+"数据"} value={index===0?activeXKey:activeYKey} onValueChange={value=>{(index===0?setXKey:setYKey)(value);setHovered(null);}}>{metrics.map(m=><option key={m.key} value={m.key} data-group={m.group}>{m.label}</option>)}</FilterSelect></label>)}
         <div className="chart-controls">
-          <label>联赛级别<FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setHovered(null); }}><option value="ALL">全部级别</option><option value="10">英冠</option><option value="11">英甲</option><option value="12">英乙</option></FilterSelect></label>
+          <label>联赛级别<FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setHovered(null); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
           {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
         <div className="analytics-count">{dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
@@ -227,7 +237,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           if (!svgRef.current) return;
           setExporting(true); setExportStatus("正在生成图片…");
           try {
-            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + (competitionName[Number(competition)] ?? "全部级别") + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + ".png" });
+            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + leagueLabel(competition) + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + ".png" });
             setExportStatus(fallbackCount ? "图片已导出，部分球衣无法加载，已以文字标记替代。" : "图片已导出");
           } catch { setExportStatus("导出失败，请重试。"); }
           finally { setExporting(false); }
@@ -244,11 +254,21 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={11} /></clipPath>)}</defs>
           {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + (hovered === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => setHovered(datum.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setHovered(datum.id); } }}>
             <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={12} />
-            {datum.image && <image href={datum.image} x={x(datum.x) - 11} y={y(datum.y) - 11} width={22} height={22} preserveAspectRatio="xMidYMid meet" clipPath={"url(#analytics-clip-" + datum.id + ")"} pointerEvents="none" />}
+            {datum.image && loadChartImages && <image href={datum.image} x={x(datum.x) - 11} y={y(datum.y) - 11} width={22} height={22} preserveAspectRatio="xMidYMid meet" clipPath={"url(#analytics-clip-" + datum.id + ")"} pointerEvents="none" />}
             <circle className="chart-jersey-hit" cx={x(datum.x)} cy={y(datum.y)} r={16} />
           </g>)}
           {labels.filter((label) => label.id !== hovered).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
-          {selected && <g className="chart-tooltip" transform={"translate(" + tooltipX + " " + tooltipY + ")"}><rect width={282} height={88} rx={9} /><text className="chart-tooltip-name" x={11} y={22}>{selected.name}</text><text x={11} y={43}>{selected.subtitle}</text><text x={11} y={65}>{selected.detail}</text></g>}
+          {selected && <g className="chart-tooltip" transform={"translate(" + tooltipX + " " + tooltipY + ")"}>
+            <rect className="tooltip-shell" width={310} height={140} rx={13} />
+            <text className="chart-tooltip-name" x={14} y={26}>{selected.name}</text>
+            <text className="tooltip-subtitle" x={14} y={47}>{selected.subtitle}</text>
+            {[{label:xLabel,value:selected.x,x:12},{label:yLabel,value:selected.y,x:161}].map(metric=><g key={metric.x}>
+              <rect className="tooltip-metric-box" x={metric.x} y={62} width={137} height={63} rx={8} />
+              <text className="tooltip-metric-label" x={metric.x+10} y={81}>{metric.label}</text>
+              <text className="tooltip-metric-value" x={metric.x+10} y={111}>{metric.value.toFixed(Math.abs(metric.value)<1?3:2)}</text>
+            </g>)}
+          </g>}
+
           <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{xLabel+(lowerBetter(activeXKey)?"（向右越低）":" →")}</text>
           <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{yLabel+(lowerBetter(activeYKey)?"（向上越低）":" ↑")}</text>
         </svg>{!dots.length && <p className="stats-empty">当前筛选无可用数据，请更换指标或降低出场门槛。</p>}</div>
@@ -259,10 +279,15 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
 
 export function Dashboard({ data }: { data: DashboardData }) {
   const [playerQuery, setPlayerQuery] = useState("");
+  const [rankPosition, setRankPosition] = useState<typeof positions[number]>("GK");
+  const [rankPage, setRankPage] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   const active = data.upcomingRound && now >= Date.parse(data.upcomingRound.meta.lockoutAt) ? data.upcomingRound : data;
   const searchResults = useMemo(() => Object.values(active.picks).flat().filter((player) => `${player.name} ${player.fullName} ${player.team}`.toLowerCase().includes(playerQuery.trim().toLowerCase())).sort((a, b) => b.score - a.score), [active.picks, playerQuery]);
+  const ranked = active.picks[rankPosition];
+  const rankPages = Math.max(1, Math.ceil(ranked.length / 10));
+  const currentRankPage = Math.min(rankPage, rankPages - 1);
   const captain = [...active.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
   const lockout = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(active.meta.lockoutAt));
   return (
@@ -281,7 +306,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 {active.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
                   <span className="lineup-position">{position}</span>
                   <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
-                  <RichImage className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
+                  <RichImage priority className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
                   <strong>{player.name}</strong><small>{player.team}</small><span className="lineup-score">预期得分 <b>{player.score.toFixed(1)}</b></span>
                   <FixtureBadges fixtures={player.fixtureBadges} />
                   {player.id === captain?.id && <span className="lineup-captain" aria-label="队长">C</span>}
@@ -294,13 +319,13 @@ export function Dashboard({ data }: { data: DashboardData }) {
           <section className="panel recommendations" id="recommendations">
           <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{active.meta.roundName} 球员预期得分</h2></div><span>截止 {lockout}</span></div>
           {!!active.meta.recentRoundName && <div className="round-data-status">已计入 {active.meta.recentRoundName} 已结算 {active.meta.recentFinalizedGames}/{active.meta.recentTotalGames} 场 · 未赛场次结束后更新预测</div>}
-          <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label><span>{playerQuery.trim() ? `${searchResults.length} 人` : "各位置前 10 人"}</span></div>
-          {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs defaultValue="GK">
+          <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label>{playerQuery.trim() ? <span>{searchResults.length} 人</span> : <div className="ranking-pager" role="group" aria-label="推荐排名翻页" onKeyDown={event=>{if(event.key==="ArrowLeft" || event.key==="ArrowRight"){event.preventDefault();setRankPage(Math.max(0,Math.min(rankPages-1,currentRankPage+(event.key==="ArrowRight"?1:-1))));}}}><button type="button" aria-label="上一页推荐排名" disabled={currentRankPage===0} onClick={()=>setRankPage(currentRankPage-1)}><ChevronLeft size={16}/></button><span>{currentRankPage*10+1}–{Math.min((currentRankPage+1)*10,ranked.length)} <small>/ {ranked.length}</small></span><button type="button" aria-label="下一页推荐排名" disabled={currentRankPage>=rankPages-1} onClick={()=>setRankPage(currentRankPage+1)}><ChevronRight size={16}/></button></div>}</div>
+          {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs value={rankPosition} onValueChange={value=>{setRankPosition(value as typeof rankPosition);setRankPage(0);}}>
             <TabsList className="position-tabs" aria-label="位置筛选">
               {positions.map((position) => <TabsTrigger key={position} value={position}>{positionName[position]}</TabsTrigger>)}
             </TabsList>
             {positions.map((position) => (
-              <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(0, 10).map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}</div></TabsContent>
+              <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(currentRankPage*10, (currentRankPage+1)*10).map((player, index) => <PlayerRow player={player} rank={currentRankPage*10 + index + 1} key={player.id} />)}</div></TabsContent>
             ))}
           </Tabs>}
           <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。列表中的“动作得分 / 场”是仅由关键传球、射正、防守动作或扑救获得的每场预期分（结合少量同位置先验估计），不含进球、助攻和零封，也不是动作次数。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
@@ -327,7 +352,12 @@ export function Dashboard({ data }: { data: DashboardData }) {
           <div className="panel" id="news">
             <div className="section-heading"><div><Newspaper size={18} /><h2>EFL 新闻</h2></div><span>{data.news.length} 条</span></div>
             <div className="news-list">
-              {data.news.map((item) => <a href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${item.title}`}><div><span>{item.source}</span><time>{item.date}</time></div><strong>{item.title}</strong></a>)}
+              {data.news.map(item=><article className="news-card" key={item.url}>
+                <div className="news-card-meta"><span>{item.category ?? "赛场动态"}</span><time>{item.date}</time><a href={item.url} target="_blank" rel="noreferrer">原文 ↗</a></div>
+                <h3>{item.titleZh ?? "EFL 最新赛场动态"}</h3><p className="news-summary">{item.summary ?? "查看原文了解赛场信息。"}</p>
+                <div className="news-impacts">{item.impacts?.map((impact,index)=><div className={"news-impact news-impact-"+impact.kind} key={index}><span>{impact.kind==="positive"?"利好观察":impact.kind==="negative"?"风险提醒":impact.kind==="injury"?"伤停动态":"选人提示"}</span><p>{impact.text}</p></div>)}</div>
+                <small className="news-analysis-note">消息来源：{item.source} · Fantasy 影响为判断，不自动调整模型分数</small>
+              </article>)}
             </div>
           </div>
         </section>
