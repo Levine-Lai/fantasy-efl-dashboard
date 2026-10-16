@@ -203,6 +203,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   const playerMaximum = chartDomain(dots.flatMap(d=>[d.x,d.y]))[1];
   const xDomain: [number,number] = comparison ? chartDomain(dots.flatMap(d=>[d.x,d.y])) : chartDomain(dots.map(d=>d.x));
   const yDomain: [number,number] = comparison ? chartDomain(dots.flatMap(d=>[d.x,d.y])) : chartDomain(dots.map(d=>d.y));
+  const markerRadius = 16;
   const left = 92, top = 68, size = 654, right = left + size, bottom = top + size;
   const x = (value: number) => left + (lowerBetter(activeXKey) ? 1 - (value - xDomain[0]) / (xDomain[1] - xDomain[0]) : (value - xDomain[0]) / (xDomain[1] - xDomain[0])) * size;
   const y = (value: number) => lowerBetter(activeYKey)
@@ -215,13 +216,13 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
     const px = x(datum.x), py = y(datum.y);
     const labelWidth = Math.min(170, Math.max(48, datum.name.length * 7));
     const candidates = [
-      { x: px + 17, y: py - 19 }, { x: px - labelWidth - 17, y: py - 19 },
-      { x: px + 17, y: py + 5 }, { x: px - labelWidth - 17, y: py + 5 },
+      { x: px + 23, y: py - 19 }, { x: px - labelWidth - 23, y: py - 19 },
+      { x: px + 23, y: py + 5 }, { x: px - labelWidth - 23, y: py + 5 },
     ];
     for (const box of candidates.map((candidate) => ({ ...candidate, width: labelWidth, height: 18 }))) {
       if (box.x < left || box.y < top || box.x + box.width > right || box.y + box.height > bottom) continue;
       if (labels.some((label) => box.x < label.box.x + label.box.width + 5 && box.x + box.width + 5 > label.box.x && box.y < label.box.y + label.box.height + 5 && box.y + box.height + 5 > label.box.y)) continue;
-      if (dots.some((other) => other.id !== datum.id && x(other.x) > box.x - 14 && x(other.x) < box.x + box.width + 14 && y(other.y) > box.y - 14 && y(other.y) < box.y + box.height + 14)) continue;
+      if (dots.some((other) => other.id !== datum.id && x(other.x) > box.x - 20 && x(other.x) < box.x + box.width + 20 && y(other.y) > box.y - 20 && y(other.y) < box.y + box.height + 20)) continue;
       labels.push({ id: datum.id, name: datum.name, x: box.x, y: box.y + 13, box });
       break;
     }
@@ -267,11 +268,11 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
             return <g key={fraction}><line className="chart-grid" x1={x(xv)} x2={x(xv)} y1={top} y2={bottom} /><line className="chart-grid" x1={left} x2={right} y1={y(yv)} y2={y(yv)} /><text className="chart-tick" x={x(xv)} y={bottom + 24} textAnchor="middle">{formatChartTick(xv, xDomain)}</text><text className="chart-tick" x={left - 12} y={y(yv) + 4} textAnchor="end">{formatChartTick(yv, yDomain)}</text></g>;
           })}
           {!comparison ? <><line className="chart-midline" x1={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} x2={x(dots.reduce((sum,d)=>sum+d.x,0)/Math.max(1,dots.length))} y1={top} y2={bottom} /><line className="chart-midline" x1={left} x2={right} y1={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} y2={y(dots.reduce((sum,d)=>sum+d.y,0)/Math.max(1,dots.length))} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">{activeXKey==="xgPerGame" && activeYKey==="xgaPerGame" ? "攻强 · 守强" : ""}</text></> : <><line className="chart-midline" x1={x(Math.max(xDomain[0], yDomain[0]))} y1={y(Math.max(xDomain[0], yDomain[0]))} x2={x(playerMaximum)} y2={y(playerMaximum)} /><text className="chart-quadrant" x={right - 12} y={top + 21} textAnchor="end">进球多于预期</text></>}
-          <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={11} /></clipPath>)}</defs>
+          <defs>{dots.filter((datum) => datum.image).map((datum) => <clipPath id={"analytics-clip-" + datum.id} key={datum.id}><circle cx={x(datum.x)} cy={y(datum.y)} r={markerRadius} /></clipPath>)}</defs>
           {dots.map((datum) => <g key={datum.id} className={"chart-jersey-dot" + ((hovered ?? pinned) === datum.id ? " chart-dot-active" : "")} tabIndex={0} role="button" aria-label={datum.name + "，" + datum.detail} onMouseEnter={() => setHovered(datum.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(datum.id)} onBlur={() => setHovered(null)} onClick={() => {setPinned(datum.id);setHovered(datum.id);}} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPinned(datum.id); setHovered(datum.id); } else if(event.key === "Escape") {setPinned(null);setHovered(null);} }}>
-            <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={12} />
-            {datum.image && loadChartImages && <image href={datum.image} x={x(datum.x) - 11} y={y(datum.y) - 11} width={22} height={22} preserveAspectRatio="xMidYMid meet" clipPath={"url(#analytics-clip-" + datum.id + ")"} pointerEvents="none" />}
-            <circle className="chart-jersey-hit" cx={x(datum.x)} cy={y(datum.y)} r={16} />
+            <circle className="chart-jersey-bg" cx={x(datum.x)} cy={y(datum.y)} r={markerRadius + 1} />
+            {datum.image && loadChartImages && <image href={datum.image} x={x(datum.x) - markerRadius} y={y(datum.y) - markerRadius} width={markerRadius * 2} height={markerRadius * 2} preserveAspectRatio="xMidYMid meet" clipPath={"url(#analytics-clip-" + datum.id + ")"} pointerEvents="none" />}
+            <circle className="chart-jersey-hit" cx={x(datum.x)} cy={y(datum.y)} r={markerRadius + 6} />
           </g>)}
           {labels.filter((label) => label.id !== selected?.id).map((label) => <text className="chart-player-label" key={label.id} x={label.x} y={label.y}>{label.name}</text>)}
           {selected && <g className="chart-tooltip" transform={"translate(" + tooltipX + " " + tooltipY + ")"}>

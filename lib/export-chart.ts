@@ -45,8 +45,8 @@ export async function exportChartPng(svg: SVGSVGElement, options: ExportOptions)
     if (data) { image.setAttribute("href", data); continue; }
     missing++;
     const fallback = document.createElementNS(namespace, "text");
-    fallback.setAttribute("x", String(Number(image.getAttribute("x")) + 11));
-    fallback.setAttribute("y", String(Number(image.getAttribute("y")) + 14));
+    fallback.setAttribute("x", String(Number(image.getAttribute("x")) + Number(image.getAttribute("width")) / 2));
+    fallback.setAttribute("y", String(Number(image.getAttribute("y")) + Number(image.getAttribute("height")) / 2 + 3));
     fallback.setAttribute("text-anchor", "middle");
     fallback.setAttribute("style", "fill:#003153;font:700 8px Arial");
     const name = image.parentElement?.getAttribute("aria-label")?.split("，")[0] ?? "";

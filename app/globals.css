@@ -519,11 +519,14 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .chart-note { margin:0; overflow-wrap:anywhere; }
   .analytics-visual { padding:14px 10px; }
   .analytics-visual-heading, .chart-actions { flex-wrap:wrap; }
-  .analytics-visual-heading strong { font-size:14px; line-height:1.6; }
+  .analytics-visual-heading strong { font-size:16px; line-height:1.6; }
+  .analytics-visual-heading .chart-heading-actions { width:100%; justify-content:space-between; gap:8px; }
+  .analytics-visual-heading .chart-heading-actions > span { font-size:12px; }
+  .chart-export { font-size:13px; }
   .chart-svg-wrap { overflow:visible; }
   .opportunity-svg { min-width:0; width:100%; }
-  .chart-tick { font-size:22px; }
-  .chart-axis-label { font-size:23px; }
+  .chart-tick { font-size:27px; }
+  .chart-axis-label { font-size:28px; }
   .chart-player-label, .chart-quadrant, .chart-tooltip { display:none; }
   .chart-touch-detail { display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid var(--border); border-radius:10px; background:#f2f7fa; font-size:13px; line-height:1.7; overflow-wrap:anywhere; }
   .stats-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding-inline:14px; gap:12px; }
@@ -533,10 +536,12 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   .stats-count { margin:0; justify-self:end; align-self:end; }
   .stats-footer { flex-wrap:wrap; padding:12px 14px; font-size:11px; line-height:1.7; }
   .stats-footer > div { margin-left:auto; }
-  .stats-table .stats-name-col { min-width:155px; width:155px; max-width:155px; white-space:normal; }
-  .stats-player-link { gap:7px; padding:0; }
+  .stats-table th, .stats-table td { min-width:68px; height:42px; padding:7px 6px; font-size:12px; }
+  .stats-table thead button { min-height:32px; justify-content:center; gap:3px; white-space:normal; line-height:1.35; }
+  .stats-table .stats-name-col { min-width:128px; width:128px; max-width:128px; white-space:normal; }
+  .stats-player-link { gap:5px; padding:0; }
   .stats-player-link strong { white-space:normal; overflow:visible; overflow-wrap:anywhere; font-size:12px; }
-  .stats-team-logo { width:23px; height:23px; }
+  .stats-team-logo { width:22px; height:22px; }
   .table-scroll-hint { display:block; margin:0; padding:0 14px 10px; color:#668396; font-size:11px; }
   .stats-scroll { overscroll-behavior-x:contain; }
   .lower-grid > .panel { padding:14px; }
