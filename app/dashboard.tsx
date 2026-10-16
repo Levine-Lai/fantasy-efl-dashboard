@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Newspaper, Sparkles, Trophy } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Sparkles, Trophy } from "lucide-react";
+import { RoundFixtures } from "./round-fixtures";
+import { defaultRound, loadRound } from "@/lib/round-view";
 import { TeamStatsTable } from "./team-stats-table";
 import { ranking, tint } from "@/lib/player-profile";
 import { leagueOptions, includesLeague, leagueLabel } from "@/lib/league-selection";
@@ -9,7 +11,7 @@ import { chartDomain, formatChartTick } from "@/lib/chart-scale";
 import { exportChartPng } from "@/lib/export-chart";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DashboardData, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
+import type { DashboardData, RoundView, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
 
 const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
@@ -31,7 +33,7 @@ function FixtureBadges({ fixtures }: { fixtures: FixtureBadge[] }) {
   return <span className="fixture-badges">{fixtures.map((fixture, index) => <span className="fixture-badge" key={`${fixture.opponent}-${index}`} title={`${fixture.label} ${fixture.opponent}`}><span>{fixture.label}</span><RichImage className="fixture-logo" src={fixture.opponentLogo} alt={`${fixture.opponent} 队徽`} /><span>{fixture.opponent}</span></span>)}</span>;
 }
 
-function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
+function PlayerRow({ player, rank, actual=false }: { player: PlayerPick; rank: number; actual?:boolean }) {
   return (
     <article className="player-row">
       <div className="rank">{String(rank).padStart(2, "0")}</div>
@@ -40,13 +42,13 @@ function PlayerRow({ player, rank }: { player: PlayerPick; rank: number }) {
         <RichImage className="mini-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
       </div>
       <div className="player-main">
-        <div className="player-title"><strong>{player.name}</strong><span className={`pill pill-${labelFor(player)}`}>{labelFor(player)}</span></div>
-        <div className="player-meta"><span>{player.team}</span><span>{player.fixtures.join(" · ")}</span><span title="按官方逐场门槛计算关键传球、射正、解围、封堵、抢断、拦截或扑救的得分，再结合少量同位置先验估计；不含进球、助攻和零封分。">动作得分 {player.actionScore.toFixed(1)} / 场</span></div>
+        <div className="player-title"><strong>{player.name}</strong><span className={`pill pill-${labelFor(player)}`}>{actual?"已结算":labelFor(player)}</span></div>
+        <div className="player-meta"><span>{player.team}</span><span>{player.fixtures.join(" · ")}</span><span title={actual?"本轮已结算比赛实际动作得分的场均值；不含进球、助攻和零封分。":"按官方逐场门槛计算关键传球、射正、解围、封堵、抢断、拦截或扑救的得分，再结合少量同位置先验估计；不含进球、助攻和零封分。"}>动作得分 {player.actionScore.toFixed(1)} / 场</span></div>
       </div>
-      <div className="player-stat"><span>预计分钟</span><b>{player.expectedMinutes}′</b></div>
-      <div className="player-stat ownership-stat"><span>持有</span><b>{player.ownership}%</b></div>
-      <div className="player-stat desktop-stat"><span>对阵</span><b>{player.matchup > 0 ? "+" : ""}{player.matchup}%</b></div>
-      <div className="score"><span>预期得分</span><b>{player.score}</b></div>
+      <div className="player-stat"><span>{actual?"本轮分钟":"预计分钟"}</span><b>{player.expectedMinutes}′</b></div>
+      <div className="player-stat ownership-stat"><span>持有</span><b>{actual?"—":player.ownership+"%"}</b></div>
+      <div className="player-stat desktop-stat"><span>{actual?"赛程":"对阵"}</span><b>{actual?player.fixtures.length+" 场":(player.matchup>0?"+":"")+player.matchup+"%"}</b></div>
+      <div className="score"><span>{actual?"实际得分":"预期得分"}</span><b>{player.score}</b></div>
     </article>
   );
 }
@@ -73,11 +75,11 @@ function applicableStat(key: StatKey, position: string) {
   return positionStats[position]?.has(key) ?? false;
 }
 
-function StatsTable({ players }: { players: PlayerStat[] }) {
+function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:number }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
   const [position, setPosition] = useState("OUT");
-  const [minimum, setMinimum] = useState(3);
+  const [minimum, setMinimum] = useState(roundId<=2?1:3);
   const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
   const [descending, setDescending] = useState(true);
   const [page, setPage] = useState(0);
@@ -129,7 +131,7 @@ function StatsTable({ players }: { players: PlayerStat[] }) {
       <p className="table-scroll-hint">左右滑动查看全部数据 · 球员列固定</p><div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href={`./personal.html?player=${player.id}`} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href={`./personal.html?player=${player.id}&gw=${roundId}`} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
@@ -142,11 +144,11 @@ function formatUpdated(value: string) { return value ? new Intl.DateTimeFormat("
 
 type AnalyticsDatum = { id: string; name: string; image: string; x: number; y: number; subtitle: string; detail: string };
 
-function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string }) {
+function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, historical=false }: { players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string; historical?:boolean }) {
   const [mode, setMode] = useState<"team" | "player">("team");
   const [competition, setCompetition] = useState("10");
   const [position, setPosition] = useState("ATT");
-  const [minimum, setMinimum] = useState(450);
+  const [minimum, setMinimum] = useState(historical?90:450);
   const svgRef = useRef<SVGSVGElement>(null);
   const [loadChartImages, setLoadChartImages] = useState(false);
   useEffect(() => {
@@ -159,8 +161,8 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   const [exportStatus, setExportStatus] = useState("");
   const [hovered, setHovered] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [xKey, setXKey] = useState("xgPerGame");
-  const [yKey, setYKey] = useState("xgaPerGame");
+  const [xKey, setXKey] = useState(historical?"goalsPerGame":"xgPerGame");
+  const [yKey, setYKey] = useState(historical?"goalsAgainstPerGame":"xgaPerGame");
   const metrics = mode === "team" ? [
     {key:"xgPerGame",label:"预期进球 · xG / 场",group:"预期表现"},
     {key:"xgaPerGame",label:"预期失球 · xGA / 场",group:"预期表现"},
@@ -170,6 +172,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
     {key:"pointsDeltaPerGame",label:"积分超预期 / 场",group:"实际与预期偏差"},
     {key:"finishingDeltaPerGame",label:"进球超预期 / 场",group:"实际与预期偏差"},
     {key:"goalsPerGame",label:"进球 / 场",group:"比赛结果"},
+    {key:"goalsAgainstPerGame",label:"失球 / 场",group:"比赛结果"},
     {key:"winRate",label:"胜率 · %",group:"比赛结果"},
     {key:"cleanSheetRate",label:"零封率 · %",group:"比赛结果"},
     {key:"pointsPerGame",label:"联赛积分 / 场",group:"比赛结果"},
@@ -177,11 +180,12 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
     ...(position !== "GK" ? [{key:"xg90",label:"预期进球 / 90",group:"预期与效率"},{key:"goals90",label:"实际进球 / 90",group:"预期与效率"},{key:"goalInvolvements90",label:"进球 + 助攻 / 90",group:"预期与效率"},{key:"keyPasses90",label:"关键传球 / 90",group:"预期与效率"},{key:"shotsOnTarget90",label:"射正 / 90",group:"预期与效率"},{key:"defensiveActions90",label:"防守动作 / 90",group:"预期与效率"}] : [{key:"saveRate",label:"扑救率 · %",group:"门将效率"}]),
     {key:"ownership",label:"持有率 · %",group:"样本与热度"},{key:"appearances",label:"出场次数",group:"样本与热度"},
     ...statColumns.filter(({key})=>position === "ALL" || (position === "ATT" ? applicableStat(key, "MID") || applicableStat(key, "FWD") : applicableStat(key, position))).map(({key,label})=>({key,label:label+" / 场",group:keeperOnly.has(key)?"门将动作":"基础场均"}))];
-  const activeXKey = metrics.some(m=>m.key===xKey) ? xKey : "points";
-  const activeYKey = metrics.some(m=>m.key===yKey) ? yKey : "minutesPlayed";
-  const xLabel = metrics.find(m=>m.key===activeXKey)?.label ?? activeXKey;
-  const yLabel = metrics.find(m=>m.key===activeYKey)?.label ?? activeYKey;
-  const lowerBetter = (key: string) => ["xgaPerGame","goalsConceded","yellowCards","redCards","ownGoals","penaltyMisses"].includes(key);
+  const availableMetrics=historical?metrics.filter(m=>!["xgPerGame","xgaPerGame","xgdPerGame","xgShare","xptsPerGame","pointsDeltaPerGame","finishingDeltaPerGame","xg90","ownership"].includes(m.key)):metrics;
+  const activeXKey = availableMetrics.some(m=>m.key===xKey) ? xKey : "points";
+  const activeYKey = availableMetrics.some(m=>m.key===yKey) ? yKey : "minutesPlayed";
+  const xLabel = availableMetrics.find(m=>m.key===activeXKey)?.label ?? activeXKey;
+  const yLabel = availableMetrics.find(m=>m.key===activeYKey)?.label ?? activeYKey;
+  const lowerBetter = (key: string) => ["xgaPerGame","goalsAgainstPerGame","goalsConceded","yellowCards","redCards","ownGoals","penaltyMisses"].includes(key);
   const valueFor = (row: TeamStat | PlayerStat, key: string): number | null => {
     if ("perGame" in row) {
       const stats = row.perGame;
@@ -231,7 +235,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
   const tooltipY = selected ? Math.min(bottom - 140, Math.max(top, y(selected.y) - 148)) : 0;
   const statzCompetition = competition === "11" ? "league-one" : competition === "12" ? "league-two" : "championship";
   const statzUrl = `https://statz.ai/competitions/${statzCompetition}/xg${mode === "player" ? "/players" : ""}`;
-  const changeMode = (value: "team" | "player") => { setMode(value); setXKey(value === "team" ? "xgPerGame" : "xg90"); setYKey(value === "team" ? "xgaPerGame" : "goals90"); setHovered(null); };
+  const changeMode = (value: "team" | "player") => { setMode(value); setXKey(value === "team" ? (historical?"goalsPerGame":"xgPerGame") : (historical?"goals90":"xg90")); setYKey(value === "team" ? (historical?"goalsAgainstPerGame":"xgaPerGame") : "goals90"); setHovered(null); };
   return <section className="panel opportunity-panel" id="chart">
     <div className="analytics-layout">
       <aside className="analytics-sidebar">
@@ -240,13 +244,13 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt }: { 
           <button type="button" onClick={() => changeMode("player")} aria-pressed={mode === "player"}>球员</button>
           <button type="button" onClick={() => changeMode("team")} aria-pressed={mode === "team"}>球队</button>
         </div>
-        {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><FilterSelect aria-label={label+"数据"} value={index===0?activeXKey:activeYKey} onValueChange={value=>{(index===0?setXKey:setYKey)(value);setHovered(null);}}>{metrics.map(m=><option key={m.key} value={m.key} data-group={m.group}>{m.label}</option>)}</FilterSelect></label>)}
+        {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><FilterSelect aria-label={label+"数据"} value={index===0?activeXKey:activeYKey} onValueChange={value=>{(index===0?setXKey:setYKey)(value);setHovered(null);}}>{availableMetrics.map(m=><option key={m.key} value={m.key} data-group={m.group}>{m.label}</option>)}</FilterSelect></label>)}
         <div className="chart-controls">
           <label>联赛级别<FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setHovered(null); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
-          {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
+          {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={90}>90 分钟</option><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
         <div className="analytics-count">{dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
-        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{formatUpdated(xgUpdatedAt)}<br />每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
+        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{xgUpdatedAt?formatUpdated(xgUpdatedAt):"历史无存档"}<br />每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
         <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
@@ -298,89 +302,109 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const [playerQuery, setPlayerQuery] = useState("");
   const [rankPosition, setRankPosition] = useState<typeof positions[number]>("GK");
   const [rankPage, setRankPage] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
-  const active = data.upcomingRound && now >= Date.parse(data.upcomingRound.meta.lockoutAt) ? data.upcomingRound : data;
+  const roundIndex=data.roundIndex ?? [];
+  const [selectedRound,setSelectedRound]=useState(()=>{
+    const requested=Number(new URLSearchParams(location.search).get('gw'));
+    return roundIndex.some(r=>r.id===requested)?requested:defaultRound(roundIndex)??data.meta.roundId;
+  });
+  const [roundView,setRoundView]=useState<RoundView|null>(null);
+  const [roundError,setRoundError]=useState('');
+  const [retry,setRetry]=useState(0);
+  const [loading,setLoading]=useState(false);
+  useEffect(()=>{
+    let cancelled=false;
+    const round=roundIndex.find(r=>r.id===selectedRound);
+    if(selectedRound===data.meta.roundId || !round){setRoundView(null);setLoading(false);setRoundError('');return;}
+    setLoading(true);setRoundError('');
+    loadRound(round).then(value=>{if(!cancelled)setRoundView(value);}).catch(error=>{if(!cancelled)setRoundError(error.message);}).finally(()=>{if(!cancelled)setLoading(false);});
+    return ()=>{cancelled=true;};
+  },[selectedRound,retry,data,roundIndex]);
+  const active=roundView ?? data;
+  const actual=active.scoreKind==='actual';
+  const pending=loading||!!roundError||active.meta.roundId!==selectedRound;
+  const playerStats=roundView?.playerStats ?? data.playerStats;
+  const teamStats=roundView?.teamStats ?? data.teamStats;
+  const roundPosition=roundIndex.findIndex(r=>r.id===selectedRound);
+  const selectedEntry=roundIndex[roundPosition];
+  const scoreLabel=actual?'实际得分':'预期得分';
+  const chooseRound=(id:number)=>{setSelectedRound(id);setRankPage(0);setPlayerQuery('');const url=new URL(location.href);url.searchParams.set('gw',String(id));history.replaceState(null,'',url);};
   const searchResults = useMemo(() => Object.values(active.picks).flat().filter((player) => `${player.name} ${player.fullName} ${player.team}`.toLowerCase().includes(playerQuery.trim().toLowerCase())).sort((a, b) => b.score - a.score), [active.picks, playerQuery]);
   const ranked = active.picks[rankPosition];
   const rankPages = Math.max(1, Math.ceil(ranked.length / 10));
   const currentRankPage = Math.min(rankPage, rankPages - 1);
   const captain = [...active.startingSeven].sort((a, b) => b.score - a.score || b.reliability - a.reliability)[0];
-  const lockout = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(active.meta.lockoutAt));
+  const lockout = active.meta.lockoutAt ? new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(active.meta.lockoutAt)) : "待公布";
   return (
     <main>
-      <header className="topbar">
+      <header className="topbar dashboard-topbar">
         <a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="./official-fantasy-efl.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a>
-        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href="./personal.html">个人数据</a><a href="#clubs">球队</a><a href="#news">新闻</a></nav>
+        <div className="round-navigation" role="group" aria-label="切换 Gameweek"><button type="button" aria-label="上一个 GW" disabled={roundPosition<=0} onClick={()=>chooseRound(roundIndex[roundPosition-1].id)}><ChevronLeft size={17}/></button><FilterSelect aria-label="选择 GW" value={String(selectedRound)} onValueChange={value=>chooseRound(Number(value))}>{roundIndex.map(r=><option key={r.id} value={String(r.id)}>{r.name} · {r.state==="completed"?"已结束":r.state==="current"?"当前":"待赛"}</option>)}</FilterSelect><button type="button" aria-label="下一个 GW" disabled={roundPosition<0||roundPosition>=roundIndex.length-1} onClick={()=>chooseRound(roundIndex[roundPosition+1].id)}><ChevronRight size={17}/></button></div>
+        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href={"./personal.html?gw="+selectedRound}>个人数据</a><a href="#clubs">球队</a><a href="#fixtures">赛程</a></nav>
       </header>
 
       <div className="dashboard-shell" id="top">
+        <div className="gw-status" role="status"><strong>{selectedEntry?.name ?? active.meta.roundName}</strong><span>{loading?'正在加载所选 GW…':roundError?roundError:actual?'历史回顾 · 官方实际得分；双赛得分相加':selectedEntry?.state==='current'?'当前 GW · 剩余赛程预期得分，已赛结果见赛程':!selectedEntry?.fixtureCount?'赛程待公布 · 暂无预测':'未来 GW · 按当前样本推演，临近比赛时每日重算'}</span>{roundError&&<button type="button" onClick={()=>setRetry(n=>n+1)}>重试</button>}</div>
+        <div className={"gw-content"+(pending?' gw-content-pending':'')} aria-busy={pending} inert={pending}>
         <section className="lead-grid">
           <div className="panel selection-panel">
-            <div className="section-heading"><div><Sparkles size={18} /><h2>{active.meta.roundName} 推荐阵容</h2></div><span>截止 {lockout}</span></div>
-            <div className="lineup-pitch" aria-label={`${active.meta.roundName} 七人阵型`}>
+            <div className="section-heading"><div><Sparkles size={18} /><h2>{active.meta.roundName} {actual?"高分阵容 · 回顾":"推荐阵容"}</h2></div><span>截止 {lockout}</span></div>
+            {!active.startingSeven.length&&<p className="stats-empty">本 GW 暂无可推荐的剩余赛程</p>}
+            <div className={"lineup-pitch"+(!active.startingSeven.length?" lineup-empty":"")} aria-label={`${active.meta.roundName} 七人阵型`}>
               {positions.map((position) => <div className="lineup-row" key={position}>
                 {active.startingSeven.filter((player) => player.position === position).map((player) => <div className="lineup-card" key={player.id}>
                   <span className="lineup-position">{position}</span>
                   <RichImage className="lineup-crest" src={player.teamLogo} alt={`${player.team} 队徽`} />
                   <RichImage priority className="lineup-avatar" src={player.fallbackImage} alt={`${player.team} 球衣`} />
-                  <strong>{player.name}</strong><small>{player.team}</small><span className="lineup-score">预期得分 <b>{player.score.toFixed(1)}</b></span>
+                  <strong>{player.name}</strong><small>{player.team}</small><span className="lineup-score">{scoreLabel} <b>{player.score.toFixed(1)}</b></span>
                   <FixtureBadges fixtures={player.fixtureBadges} />
-                  {player.id === captain?.id && <span className="lineup-captain" aria-label="队长">C</span>}
+                  {!actual && player.id === captain?.id && <span className="lineup-captain" aria-label="队长">C</span>}
                 </div>)}
               </div>)}
             </div>
-            <div className="team-picks-heading"><Trophy size={16} /><strong>推荐球队</strong><span>选择 2 队</span></div>
-            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong><small>联赛第 {team.leaguePosition ?? "—"}</small><FixtureBadges fixtures={team.fixtureBadges} /></div><b title="球队综合推荐分">{team.score}</b></article>)}</div>
+            <div className="team-picks-heading"><Trophy size={16} /><strong>{actual?"高分球队":"推荐球队"}</strong><span>选择 2 队</span></div>
+            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong>{!actual&&<small>联赛第 {team.leaguePosition ?? "—"}</small>}<FixtureBadges fixtures={team.fixtureBadges} /></div><b title={actual?"本轮官方实际得分":"球队综合推荐分"}>{team.score}</b></article>)}</div>
           </div>
           <section className="panel recommendations" id="recommendations">
-          <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{active.meta.roundName} 球员预期得分</h2></div><span>截止 {lockout}</span></div>
+          <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{active.meta.roundName} 球员{scoreLabel}</h2></div><span>截止 {lockout}</span></div>
           {!!active.meta.recentRoundName && <div className="round-data-status">已计入 {active.meta.recentRoundName} 已结算 {active.meta.recentFinalizedGames}/{active.meta.recentTotalGames} 场 · 未赛场次结束后更新预测</div>}
           <div className="pool-toolbar"><label><span>搜索全部球员</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="球员或球队" /></label>{playerQuery.trim() ? <span>{searchResults.length} 人</span> : <div className="ranking-pager" role="group" aria-label="推荐排名翻页" onKeyDown={event=>{if(event.key==="ArrowLeft" || event.key==="ArrowRight"){event.preventDefault();setRankPage(Math.max(0,Math.min(rankPages-1,currentRankPage+(event.key==="ArrowRight"?1:-1))));}}}><button type="button" aria-label="上一页推荐排名" disabled={currentRankPage===0} onClick={()=>setRankPage(currentRankPage-1)}><ChevronLeft size={16}/></button><span>{currentRankPage+1}</span><button type="button" aria-label="下一页推荐排名" disabled={currentRankPage>=rankPages-1} onClick={()=>setRankPage(currentRankPage+1)}><ChevronRight size={16}/></button></div>}</div>
-          {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs value={rankPosition} onValueChange={value=>{setRankPosition(value as typeof rankPosition);setRankPage(0);}}>
+          {playerQuery.trim() ? <div className="player-list">{searchResults.map((player, index) => <PlayerRow actual={actual} player={player} rank={index + 1} key={player.id} />)}{!searchResults.length && <div className="stats-empty">没有找到球员</div>}</div> : <Tabs value={rankPosition} onValueChange={value=>{setRankPosition(value as typeof rankPosition);setRankPage(0);}}>
             <TabsList className="position-tabs" aria-label="位置筛选">
               {positions.map((position) => <TabsTrigger key={position} value={position}>{positionName[position]}</TabsTrigger>)}
             </TabsList>
             {positions.map((position) => (
-              <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(currentRankPage*10, (currentRankPage+1)*10).map((player, index) => <PlayerRow player={player} rank={currentRankPage*10 + index + 1} key={player.id} />)}</div></TabsContent>
+              <TabsContent value={position} key={position}><div className="player-list">{active.picks[position].slice(currentRankPage*10, (currentRankPage+1)*10).map((player, index) => <PlayerRow actual={actual} player={player} rank={currentRankPage*10 + index + 1} key={player.id} />)}</div></TabsContent>
             ))}
           </Tabs>}
-          <details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。列表中的“动作得分 / 场”是仅由关键传球、射正、防守动作或扑救获得的每场预期分（结合少量同位置先验估计），不含进球、助攻和零封，也不是动作次数。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 通过同队唯一姓名或唯一缩写匹配，并核对出场次数；只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>
+          {!actual&&<details className="model-details"><summary>预期得分如何计算</summary><p>逐场拆成动作分、进球助攻分、零封分和其他分。列表中的“动作得分 / 场”是仅由关键传球、射正、防守动作或扑救获得的每场预期分（结合少量同位置先验估计），不含进球、助攻和零封，也不是动作次数。动作分按 <a href="https://fantasy.efl.com/team" target="_blank" rel="noreferrer">Fantasy EFL</a> 官方逐场门槛计算后求均值；稳定动作仅用约 2–3 场同位置先验收缩，波动较大的进球助攻用约 10 场先验收缩。<a href="https://statz.ai/competitions/championship/xg/players" target="_blank" rel="noreferrer">Statz</a> 球员 xG 通过同队唯一姓名或唯一缩写匹配，并核对出场次数；只对进球分预期做最多 15% 的校正，缺失或样本不足则不使用。对手 xGA 修正进攻，对手 xG 修正零封；不预测对手会制造多少解围、拦截。另乘历史出场概率和最多 ±6% 的预计分钟微调。双赛两场直接相加。</p></details>}
           </section>
         </section>
 
-        <OpportunityChart players={data.playerStats} teams={data.teamStats} xgUpdatedAt={data.meta.xgUpdatedAt} officialUpdatedAt={data.meta.updatedAt} />
+        <p className="gw-stats-note">{active.statsLabel ?? data.statsLabel}</p>
+        <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
 
-        <StatsTable players={data.playerStats} />
-        <TeamStatsTable teams={data.teamStats} />
+        <StatsTable key={"stats-"+active.meta.roundId} players={playerStats} roundId={active.meta.roundId} />
+        <TeamStatsTable key={"teams-"+active.meta.roundId} teams={teamStats} />
 
         <section className="lower-grid">
           <div className="panel" id="clubs">
-            <div className="section-heading"><div><Trophy size={18} /><h2>球队选择</h2></div><span>前 {active.teams.length} 队</span></div>
-            <p className="team-model-note">推荐分：排名差 15% · 对阵预期进球 35% · 对阵预期失球 35% · 历史胜率 15%。逐场计算，双赛相加；推荐指数，不等于官方 Fantasy 积分。</p><div className="club-list">
+            <div className="section-heading"><div><Trophy size={18} /><h2>{actual?"球队实际得分":"球队选择"}</h2></div><span>前 {active.teams.length} 队</span></div>
+            <p className="team-model-note">{actual?"按本 GW 官方已结算积分排序，双赛相加。近5场截至该轮；不显示今天的排名或 xG。":"推荐分：排名差 15% · 对阵预期进球 35% · 对阵预期失球 35% · 历史胜率 15%。逐场计算，双赛相加；推荐指数，不等于官方 Fantasy 积分。"}</p><div className="club-list">
               {active.teams.map((team, index) => (
                 <article className="club-row" key={team.id}>
-                  <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.leaguePosition?`联赛第 ${team.leaguePosition} · `:""}{team.fixtures.join(" · ")}</small><small>xG {team.projectedXg?.toFixed(2) ?? "—"} / xGA {team.projectedXga?.toFixed(2) ?? "—"}</small></div>
+                  <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.leaguePosition?`联赛第 ${team.leaguePosition} · `:""}{team.fixtures.join(" · ")}</small>{!actual&&<small>xG {team.projectedXg?.toFixed(2) ?? "—"} / xGA {team.projectedXga?.toFixed(2) ?? "—"}</small>}</div>
                   <div className="club-form" aria-label={`最近 ${team.form.length} 场，由旧到新：${team.form.join(" ")}`}><span className="club-form-label">近5场</span>{team.form.map((item, i) => <i className={`form-${item}`} title={item==="W"?"胜":item==="L"?"负":"平"} key={`${item}-${i}`}>{item}</i>)}</div><b>{team.score}</b>
                 </article>
               ))}
             </div>
           </div>
 
-          <div className="panel" id="news">
-            <div className="section-heading"><div><Newspaper size={18} /><h2>EFL 新闻</h2></div><span>{data.news.length} 条</span></div>
-            <div className="news-list">
-              {data.news.map(item=><article className="news-card" key={item.url}>
-                <div className="news-card-meta"><span>{item.category ?? "赛场动态"}</span><time>{item.date}</time><a href={item.url} target="_blank" rel="noreferrer">原文 ↗</a></div>
-                <h3>{item.titleZh ?? "EFL 最新赛场动态"}</h3><p className="news-summary">{item.summary ?? "查看原文了解赛场信息。"}</p>
-                <div className="news-impacts">{item.impacts?.map((impact,index)=><div className={"news-impact news-impact-"+impact.kind} key={index}><span>{impact.kind==="positive"?"利好观察":impact.kind==="negative"?"风险提醒":impact.kind==="injury"?"伤停动态":"选人提示"}</span><p>{impact.text}</p></div>)}</div>
-                <small className="news-analysis-note">消息来源：{item.source} · Fantasy 影响为判断，不自动调整模型分数</small>
-              </article>)}
-            </div>
-          </div>
+          <RoundFixtures key={active.meta.roundId} fixtures={active.fixtures ?? []} roundName={active.meta.roundName} updatedAt={active.meta.updatedAt}/>
+
         </section>
 
-        <footer><span>FANTASY EFL DATA BOARD</span><span>官方数据 · EFL 新闻</span></footer>
+        </div>
+        <footer><span>FANTASY EFL DATA BOARD</span><span>官方数据 · GW 赛程</span></footer>
       </div>
     </main>
   );

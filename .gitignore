@@ -5,3 +5,4 @@ pages/dashboard.json
 .env*
 
 public/chart-assets/
+public/round-data/

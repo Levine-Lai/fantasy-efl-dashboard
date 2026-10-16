@@ -4,7 +4,7 @@ const API = "https://fantasy.efl.com/json/fantasy";
 type Position = "GK" | "DEF" | "MID" | "FWD";
 type RawPlayer = { id: number; squadId: number; competitionId: number; firstName: string; lastName: string; displayName: string; position: Position; status: string; percentSelected: number; appearances: number; totalPoints: number; goalsScored: number; injuryDetails?: string | null; suspensionDetails?: string | null };
 type RawSquad = { id: number; competitionId: number; name: string; shortName: string; totalPoints: number; percentSelected: number; darkBadge?: string; lightBadge?: string; jersey?: string; fdrHome?: number; fdrAway?: number; last3Form?: string[]; leaguePosition?: number };
-type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number };
+type RawGame = { id: number; date: string; status: string; homeId: number; awayId: number; competitionId?: number; homeScore?: number | null; awayScore?: number | null };
 type RawRound = { id: number; name: string; status: string; lockoutDate: string; games: (RawGame & { isFinalized?: boolean })[] };
 export const statKeys = ["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "cleanSheet", "saves", "penaltySaves", "goalsConceded", "clearances", "blocks", "tackles", "interceptions", "yellowCards", "redCards", "ownGoals", "penaltyMisses", "hatTricks"] as const;
 export type StatKey = typeof statKeys[number];
@@ -70,8 +70,12 @@ export type TeamStat = { id: number; name: string; fullName: string; logo: strin
 export type TeamPick = { id: number; name: string; logo: string; fixtures: string[]; fixtureBadges: FixtureBadge[]; form: string[]; score: number; leaguePosition: number | null; projectedXg: number | null; projectedXga: number | null };
 export type NewsItem = { title: string; url: string; source: string; date: string; titleZh?: string; summary?: string; category?: string; impacts?: {kind:"positive"|"negative"|"injury"|"watch";text:string}[] };
 export type DashboardMeta = { roundId: number; roundName: string; lockoutAt: string; fixtureCount: number; doubleTeams: number; completedRounds: number; recentRoundName: string; recentFinalizedGames: number; recentTotalGames: number; updatedAt: string; xgUpdatedAt: string; portraitVersion?: number; modelVersion?: number };
-export type RoundRecommendations = { meta: DashboardMeta; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; teams: TeamPick[]; differentialCount: number };
-export type DashboardData = RoundRecommendations & { playerStats: PlayerStat[]; teamStats: TeamStat[]; news: NewsItem[]; upcomingRound?: RoundRecommendations };
+export type RoundRecommendations = { meta: DashboardMeta; picks: Record<Position, PlayerPick[]>; startingSeven: PlayerPick[]; teams: TeamPick[]; differentialCount: number; scoreKind?: "actual" | "projection" };
+export type RoundFixture = { id:number; date:string; status:string; finalized:boolean; competitionId:number; homeId:number; awayId:number; homeName:string; awayName:string; homeLogo:string; awayLogo:string; homeScore:number|null; awayScore:number|null };
+export type RoundIndex = { id:number; name:string; lockoutAt:string; state:"completed"|"current"|"future"; file:string; fixtureCount:number; doubleTeams:number };
+export type RoundView = RoundRecommendations & { fixtures:RoundFixture[]; playerStats?:PlayerStat[]; teamStats?:TeamStat[]; statsLabel:string };
+export type DashboardData = RoundRecommendations & { playerStats: PlayerStat[]; teamStats: TeamStat[]; news: NewsItem[]; upcomingRound?: RoundRecommendations; roundIndex?:RoundIndex[]; fixtures?:RoundFixture[]; statsLabel?:string };
+type DashboardInputs = { players:RawPlayer[]; squads:RawSquad[]; rounds:RawRound[]; lives:Map<number,LiveRound> };
 
 export function selectRecommendationRounds(rounds: RawRound[], now = Date.now()) {
   const active = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status))).sort((a, b) => Date.parse(a.lockoutDate) - Date.parse(b.lockoutDate));
@@ -139,49 +143,19 @@ async function getXgRows(season: string, snapshot?: XgSnapshot) {
   return { rows, aliases, teamRows, leagueAverages, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
 }
 
-async function getNews(): Promise<NewsItem[]> {
-  const items: NewsItem[] = [];
-  try {
-    const response = await fetch("https://www.efl.com/news/", { headers: { "user-agent": "Mozilla/5.0 Fantasy EFL Data Board" } });
-    const html = await response.text();
-    const pattern = /postSlug:"([^"]+)"[\s\S]{0,2200}?publishedDateTime:"([^"]+)"[\s\S]{0,1600}?postTitle:"([^"]+)"/g;
-    for (const match of html.matchAll(pattern)) {
-      const [, path, published, title] = match;
-      if (!path.startsWith("/news/") || items.some((item) => item.url.endsWith(path))) continue;
-      items.push({ title: unescapeHtml(title.replaceAll("\\'", "'")), url: `https://www.efl.com${path}`, source: "EFL", date: new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(published)) });
-      if (items.length === 5) break;
-    }
-  } catch { /* try the secondary feed below */ }
-  if (items.length < 5) {
-    try {
-      const response = await fetch("https://news.google.com/rss/search?q=Fantasy+EFL+OR+EFL+Championship+OR+League+One+OR+League+Two&hl=en-GB&gl=GB&ceid=GB:en");
-      const xml = await response.text();
-      const pattern = /<item>[\s\S]*?<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>[\s\S]*?<link>([^<]+)<\/link>[\s\S]*?<pubDate>([^<]+)<\/pubDate>[\s\S]*?(?:<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>)?[\s\S]*?<\/item>/g;
-      for (const match of xml.matchAll(pattern)) {
-        const [, rawTitle, url, published, rawSource] = match;
-        const title = unescapeHtml(rawTitle.trim());
-        if (items.some((item) => item.title === title)) continue;
-        items.push({ title, url: unescapeHtml(url.trim()), source: unescapeHtml((rawSource || "EFL NEWS").trim()), date: new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(published)) });
-        if (items.length === 5) break;
-      }
-    } catch { /* keep the official items already collected */ }
-  }
-  return items;
-}
-
-async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number): Promise<DashboardData> {
-  const [players, squads, rounds] = await Promise.all([getJson<RawPlayer[]>("players.json"), getJson<RawSquad[]>("squads.json"), getJson<RawRound[]>("rounds.json")]);
+export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number, inputs?:DashboardInputs): Promise<DashboardData> {
+  const [players, squads, rounds] = inputs ? [inputs.players,inputs.squads,inputs.rounds] : await Promise.all([getJson<RawPlayer[]>("players.json"), getJson<RawSquad[]>("squads.json"), getJson<RawRound[]>("rounds.json")]);
   const activeRounds = rounds.filter((round) => round.games?.some((game) => !["postponed", "cancelled"].includes(game.status)));
   const selected = selectRecommendationRounds(activeRounds);
   const target = activeRounds.find((round) => round.id === targetRoundId) ?? selected.primary;
   const completed = activeRounds.filter((round) => round.id < target.id && round.status === "completed");
-  const earlier = activeRounds.filter((round) => round.id < target.id && round.games.some((game) => game.status === "completed" && game.isFinalized));
-  const recentRound = activeRounds.filter((round) => round.id < target.id).at(-1);
+  const earlier = activeRounds.filter((round) => round.id <= target.id && round.games.some((game) => game.status === "completed" && game.isFinalized));
+  const recentRound = activeRounds.filter((round) => round.id < target.id || round.id === target.id && round.games.some(game=>game.status === "completed" && game.isFinalized)).at(-1);
   const targetDate = new Date(target.games[0].date);
   const seasonStart = targetDate.getUTCFullYear() - (targetDate.getUTCMonth() < 6 ? 1 : 0);
   const [lives, xgData] = await Promise.all([
     Promise.all(earlier.map(async (round) => {
-      const live = await getJson<LiveRound>(`live_scores/${round.id}.json`);
+      const live = inputs?.lives.get(round.id) ?? await getJson<LiveRound>(`live_scores/${round.id}.json`);
       const finalized = new Set(round.games.filter((game) => game.status === "completed" && game.isFinalized).map((game) => game.id));
       return { players: live.players.filter((row) => finalized.has(row.gameId)), squads: live.squads.filter((row) => finalized.has(row.gameId)) };
     })),
@@ -324,7 +298,7 @@ async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number)
     });
     return { id: squad.id, name: squad.name, logo: squad.lightBadge || squad.darkBadge || "", fixtures: teamFixtures, fixtureBadges: fixtureBadges(squad.id), form: recentTeamForm(lives.flatMap(live=>live.squads),rounds.flatMap(round=>round.games),squad.id), score: Number(projections.reduce((sum,p)=>sum+p.score,0).toFixed(1)), leaguePosition:squad.leaguePosition ?? null, projectedXg:own && league ? Number(projections.reduce((sum,p)=>sum+p.xg,0).toFixed(2)) : null, projectedXga:own && league ? Number(projections.reduce((sum,p)=>sum+p.xga,0).toFixed(2)) : null };
   }).sort((a, b) => b.score - a.score).slice(0, 12);
-  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 10 }, picks, startingSeven, playerStats, teamStats, teams, news: await getNews(), differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
+  return { meta: { roundId: target.id, roundName: target.name.replace("Gameweek", "GW"), lockoutAt: target.lockoutDate, fixtureCount: validGames.length, doubleTeams: [...fixtures.values()].filter((list) => list.length > 1).length, completedRounds: completed.length, recentRoundName: recentRound?.name.replace("Gameweek", "GW") ?? "", recentFinalizedGames: recentRound?.games.filter((game) => game.status === "completed" && game.isFinalized).length ?? 0, recentTotalGames: recentRound?.games.filter((game) => !["postponed", "cancelled"].includes(game.status)).length ?? 0, updatedAt: new Date().toISOString(), xgUpdatedAt: xgData.updatedAt, portraitVersion: 3, modelVersion: 10 }, picks, startingSeven, playerStats, teamStats, teams, news: [], differentialCount: allPicks.filter((player) => player.score > 0 && player.ownership <= 3).length };
 }
 
 async function readCache(): Promise<DashboardData | null> {

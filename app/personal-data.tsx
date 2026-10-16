@@ -8,7 +8,7 @@ const names={GK:'门将',DEF:'后卫',MID:'中场',FWD:'前锋'};
 export function PersonalData({players,selectedId,onSelect,officialUpdatedAt,xgUpdatedAt}:{players:PlayerStat[];selectedId:number|null;onSelect:(id:number)=>void;officialUpdatedAt:string;xgUpdatedAt:string}) {
   const [league,setLeague]=useState('ALL');
   const [position,setPosition]=useState<PlayerStat['position']>('DEF');
-  const [minimum,setMinimum]=useState(450);
+  const [minimum,setMinimum]=useState(xgUpdatedAt?450:90);
   const selected=players.find(p=>p.id===selectedId);
   const activePosition=selected?.position ?? position;
   const [team,setTeam]=useState('ALL');
@@ -51,7 +51,7 @@ export function PersonalData({players,selectedId,onSelect,officialUpdatedAt,xgUp
         <div className="profile-value"><strong>{value==null?'—':value.toFixed(metric.percent?1:2)+(metric.percent?'%':'')}</strong><small>{result?`${result.rank} / ${result.n}`:'不参与排名'}</small></div>
       </div>)}</div>
       <p className="profile-note">按所选联赛同位置比较；并列同名次。每项排除缺失值和零分母，零封率按出场次数，扑救率 = 扑救 ÷（扑救＋失球）。动作次数也受球队打法影响。表格中的展示零值不会填充第三方缺失值。</p>
-      <p className="profile-note">官方统计抓取：{officialUpdatedAt.slice(0,16).replace('T',' ')} UTC · xG 抓取：{xgUpdatedAt.slice(0,16).replace('T',' ')} UTC{player.advanced?` · 扩展统计抓取：${player.advanced.updatedAt.slice(0,16).replace('T',' ')} UTC`:''} · <a href="https://statz.ai/competitions/league-two/stats/players?group=defending" target="_blank" rel="noreferrer">Statz 数据来源 ↗</a></p>
+      <p className="profile-note">官方统计抓取：{officialUpdatedAt.slice(0,16).replace('T',' ')} UTC · xG 抓取：{xgUpdatedAt?xgUpdatedAt.slice(0,16).replace('T',' ')+' UTC':'历史无存档'}{player.advanced?` · 扩展统计抓取：${player.advanced.updatedAt.slice(0,16).replace('T',' ')} UTC`:''} · <a href="https://statz.ai/competitions/league-two/stats/players?group=defending" target="_blank" rel="noreferrer">Statz 数据来源 ↗</a></p>
     </>:<p className="stats-empty">没有符合条件的球员</p>}
   </section>;
 }

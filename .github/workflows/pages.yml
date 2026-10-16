@@ -39,6 +39,7 @@ jobs:
       - run: node scripts/test-chart-data.mjs
       - run: node scripts/test-dashboard-features.mjs
       - run: node scripts/test-personal-data.mjs
+      - run: node scripts/test-round-views.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
           path: pages-dist
