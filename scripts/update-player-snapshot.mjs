@@ -13,7 +13,7 @@ try {
     const props = JSON.parse(encoded.replaceAll('&quot;','"').replaceAll('&amp;','&').replaceAll('&#039;',"'").replaceAll('&lt;','<').replaceAll('&gt;','>')).props;
     if (props.hero?.season !== season) throw new Error(`${slug}: wrong season`);
     if (!Array.isArray(props.playerRows) || props.playerRows.length < 100) throw new Error(`${slug}: incomplete data`);
-    return props.playerRows.map(row => Object.fromEntries(Object.entries({competitionId, name:row.name, team:row.team_full, apps:row.apps, mins:row.mins, tkl:row.tkl, int:row.int, aer:row.aer, due:row.due, duw:row.duw, pas:row.pas, apas:row.apas, drp:row.drp, cc:row.cc, sdrb:row.sdrb}).map(([key,value])=>[key,value ?? null])));
+    return props.playerRows.map(row => Object.fromEntries(Object.entries({competitionId, name:row.name, team:row.team_full, apps:row.apps, mins:row.mins, tkl:row.tkl, int:row.int, aer:row.aer, due:row.due, duw:row.duw, pas:row.pas, apas:row.apas, drp:row.drp, cc:row.cc, sdrb:row.sdrb, sh:row.sh, crs:row.crs, pentaken:row.pentaken, pen:row.pen}).map(([key,value])=>[key,value ?? null])));
   }));
   const data = {season,capturedAt:now.toISOString(),players:results.flat()};
   await writeFile(file, JSON.stringify(data)+'\n');

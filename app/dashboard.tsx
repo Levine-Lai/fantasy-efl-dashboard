@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Sparkles, Trophy } from "lucide-react";
 import {loadChartHistory,recentChartStats} from "@/lib/chart-history";
 import type {ChartHistory} from "@/lib/chart-history";
+import {attackingMetrics,attackingColumns,attackingValue,isAttackKey} from "@/lib/attacking-metrics";
+import type {AttackKey} from "@/lib/attacking-metrics";
+import {SetPieceTable} from "./set-piece-table";
 import { RoundFixtures } from "./round-fixtures";
 import { defaultRound, loadRound } from "@/lib/round-view";
 import { TeamStatsTable } from "./team-stats-table";
@@ -73,10 +76,13 @@ const positionStats: Record<string, ReadonlySet<StatKey>> = {
   MID: new Set(["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget", "tackles", "interceptions"]),
   FWD: new Set(["points", "minutesPlayed", "goalsScored", "assists", "keyPasses", "shotsOnTarget"]),
 };
-function applicableStat(key: StatKey, position: string) {
-  return positionStats[position]?.has(key) ?? false;
+function applicableStat(key: string, position: string) {
+  if(isAttackKey(key))return position!=="GK";
+  return positionStats[position]?.has(key as StatKey) ?? false;
 }
 
+type PlayerTableKey=StatKey|"appearances"|AttackKey;
+const tableValue=(player:PlayerStat,key:PlayerTableKey)=>key==="appearances"?player.appearances:isAttackKey(key)?attackingValue(player,key):player.perGame[key];
 function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:number }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
@@ -85,16 +91,17 @@ function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:numbe
   const teamOptions=useMemo(()=>[...new Map(players.filter(p=>includesLeague(competition,p.competitionId)).map(p=>[`${p.competitionId}:${p.team}`,{key:`${p.competitionId}:${p.team}`,name:p.team,logo:p.teamLogo}])).values()].sort((a,b)=>a.name.localeCompare(b.name)),[players,competition]);
   const [position, setPosition] = useState("OUT");
   const [minimum, setMinimum] = useState(roundId<=2?1:3);
-  const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
+  const [sortKey, setSortKey] = useState<PlayerTableKey>("points");
   const [descending, setDescending] = useState(true);
   const [page, setPage] = useState(0);
-  const columns = statColumns.filter(({ key }) => position === "ALL" || (position === "OUT" ? !keeperOnly.has(key) : applicableStat(key, position)));
+  const columns = [...statColumns,...attackingColumns].filter(({ key }) => position === "ALL" || (position === "OUT" ? !keeperOnly.has(key as StatKey) : applicableStat(key, position)));
   const effectiveSortKey = sortKey === "appearances" || columns.some(column => column.key === sortKey) ? sortKey : "points";
   const filtered = useMemo(() => players
     .filter((player) => (team === "ALL" || teamKey(player) === team) && player.appearances >= minimum && includesLeague(competition, player.competitionId) && (position === "ALL" || position === "OUT" && player.position !== "GK" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
-      const left = effectiveSortKey === "appearances" ? a.appearances : a.perGame[effectiveSortKey];
-      const right = effectiveSortKey === "appearances" ? b.appearances : b.perGame[effectiveSortKey];
+      const left = tableValue(a,effectiveSortKey);
+      const right = tableValue(b,effectiveSortKey);
+      if(left==null)return right==null?a.fullName.localeCompare(b.fullName):1;if(right==null)return -1;
       return (descending ? right - left : left - right) || b.appearances - a.appearances || a.fullName.localeCompare(b.fullName);
     }), [players, minimum, competition, team, position, query, effectiveSortKey, descending]);
   const colorRanks = useMemo(()=>{
@@ -102,10 +109,10 @@ function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:numbe
     const pool=players.filter(p=>p.appearances>=minimum && includesLeague(competition,p.competitionId));
     for(const role of positions) for(const division of [10,11,12]) {
       const group=pool.filter(p=>p.position===role && p.competitionId===division);
-      for(const {key} of statColumns) {
+      for(const {key} of [...statColumns,...attackingColumns]) {
         if(!applicableStat(key,role)) continue;
-        const values=group.map(p=>p.perGame[key]);
-        for(const p of group) {const r=ranking(p.perGame[key],values,key==='goalsConceded');if(r)result.set(`${p.id}:${key}`,r.percentile);}
+        const values=group.map(p=>tableValue(p,key));
+        for(const p of group) {const r=ranking(tableValue(p,key),values,key==='goalsConceded');if(r)result.set(`${p.id}:${key}`,r.percentile);}
       }
     }
     return result;
@@ -113,19 +120,19 @@ function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:numbe
   const totalPages = Math.max(1, Math.ceil(filtered.length / 30));
   const currentPage = Math.min(page, totalPages - 1);
   const visible = filtered.slice(currentPage * 30, (currentPage + 1) * 30);
-  const changeSort = (key: StatKey | "appearances") => {
+  const changeSort = (key: PlayerTableKey) => {
     setDescending(effectiveSortKey === key ? !descending : true);
     setSortKey(key);
     setPage(0);
   };
-  const sortHeading = (key: StatKey | "appearances", label: string) => (
+  const sortHeading = (key: PlayerTableKey, label: string) => (
     <th key={key} scope="col" aria-sort={effectiveSortKey === key ? (descending ? "descending" : "ascending") : "none"}>
       <button type="button" onClick={() => changeSort(key)}>{label}<span aria-hidden="true">{effectiveSortKey === key ? (descending ? "↓" : "↑") : "↕"}</span></button>
     </th>
   );
   return (
     <section className="panel stats-panel" id="stats">
-      <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL 官方比赛数据</span></div>
+      <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL / FotMob / Statz</span></div>
       <div className="stats-toolbar">
         <label><span>搜索</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="球员或球队" /></label>
         <label><span>联赛级别</span><FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setTeam("ALL"); setPage(0); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
@@ -137,11 +144,11 @@ function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:numbe
       <p className="table-scroll-hint">左右滑动查看全部数据 · 球员列固定</p><div className="stats-scroll" role="region" aria-label="球员场均数据表，可横向滚动" tabIndex={0}>
         <table className="stats-table">
           <thead><tr><th scope="col" className="stats-name-col">球员</th><th scope="col">位置</th>{sortHeading("appearances", "出场")}{columns.map(({ key, label }) => sortHeading(key, label))}</tr></thead>
-          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href={`./personal.html?player=${player.id}&gw=${roundId}`} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({ key }) => <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`) ?? null)}} title={colorRanks.has(`${player.id}:${key}`)?`同联赛同位置百分位 ${Math.round(colorRanks.get(`${player.id}:${key}`)!)}${key==='goalsConceded'?' · 越低越好':''}`:undefined} className={!applicableStat(key, player.position) ? "stats-inapplicable" : player.perGame[key] === 0 ? "stats-zero" : undefined} aria-label={!applicableStat(key, player.position) ? "该位置未统计，显示0.0" : undefined}>{!applicableStat(key, player.position) ? "0.0" : player.perGame[key] === 0 ? "0.0" : player.perGame[key].toFixed(key === "minutesPlayed" ? 1 : 2)}</td>)}</tr>)}</tbody>
+          <tbody>{visible.map((player) => <tr key={player.id}><th scope="row" className="stats-name-col"><a className="stats-player-link" href={`./personal.html?player=${player.id}&gw=${roundId}`} title={`${player.team} · 查看个人数据`}><RichImage className="stats-team-logo" src={player.teamLogo} alt={`${player.team} 队徽`} /><strong>{player.fullName}</strong></a></th><td>{player.position}</td><td>{player.appearances}</td>{columns.map(({key})=>{const value=tableValue(player,key),applicable=applicableStat(key,player.position);return <td key={key} style={{backgroundColor:tint(colorRanks.get(`${player.id}:${key}`)??null)}} title={isAttackKey(key)?`赛季来源：${key.startsWith('fm')||key.startsWith('xa')||key.startsWith('xgi')?'FotMob':'Statz'}；按来源场数/分钟计算，缺失不计作零`:undefined} className={!applicable?'stats-inapplicable':value===0?'stats-zero':undefined}>{!applicable?'0.0':value==null?'—':value===0?'0.0':value.toFixed(key==='minutesPlayed'?1:2)}</td>;})}</tr>)}</tbody>
         </table>
         {!visible.length && <div className="stats-empty">没有符合条件的球员</div>}
       </div>
-      <div className="stats-footer"><span>浅绿优于同联赛同位置样本，浅红低于；0.0 = 零值或该位置未统计</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
+      <div className="stats-footer"><span>浅绿优于同联赛同位置样本，浅红低于；0.0 = 零值或该位置未统计；— = 来源缺失；xG/xA/xGI 为 FotMob 同源赛季数据</span><div><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1}</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></div></div>
     </section>
   );
 }
@@ -200,6 +207,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
     {key:"pointsPerGame",label:"联赛积分 / 场",group:"比赛结果"},
   ] : [
     ...(position !== "GK" ? [{key:"xg90",label:"预期进球 / 90",group:"预期与效率"},{key:"goals90",label:"实际进球 / 90",group:"预期与效率"},{key:"goalInvolvements90",label:"进球 + 助攻 / 90",group:"预期与效率"},{key:"keyPasses90",label:"关键传球 / 90",group:"预期与效率"},{key:"shotsOnTarget90",label:"射正 / 90",group:"预期与效率"},{key:"defensiveActions90",label:"防守动作 / 90",group:"预期与效率"}] : [{key:"saveRate",label:"扑救率 · %",group:"门将效率"}]),
+    ...(position!=="GK"&&!shortPeriod&&!historical?attackingMetrics:[]),
     {key:"ownership",label:"持有率 · %",group:"样本与热度"},{key:"appearances",label:"出场次数",group:"样本与热度"},
     ...statColumns.filter(({key})=>position === "ALL" || (position === "ATT" ? applicableStat(key, "MID") || applicableStat(key, "FWD") : applicableStat(key, position))).map(({key,label})=>({key,label:label+" / 场",group:keeperOnly.has(key)?"门将动作":"基础场均"}))];
   const availableMetrics=historical||shortPeriod?metrics.filter(m=>!["xgPerGame","xgaPerGame","xgdPerGame","xgShare","xptsPerGame","pointsDeltaPerGame","finishingDeltaPerGame","xg90","ownership"].includes(m.key)):metrics;
@@ -210,6 +218,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
   const lowerBetter = (key: string) => ["xgaPerGame","goalsAgainstPerGame","goalsConceded","yellowCards","redCards","ownGoals","penaltyMisses"].includes(key);
   const valueFor = (row: TeamStat | PlayerStat, key: string): number | null => {
     if ("perGame" in row) {
+      if(isAttackKey(key))return attackingValue(row,key);
       const stats = row.perGame;
       if (key in stats && !applicableStat(key as StatKey, row.position)) return null;
       const per90: Record<string, number> = {goalInvolvements90: stats.goalsScored + stats.assists, keyPasses90: stats.keyPasses, shotsOnTarget90: stats.shotsOnTarget, defensiveActions90: stats.clearances + stats.blocks + stats.tackles + stats.interceptions};
@@ -273,8 +282,8 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
           {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>累计至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={90}>90 分钟</option><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
         <div className="analytics-count">{periodLabel} · {dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
-        {shortPeriod&&<p className="chart-window-note">按每支球队最近比赛 / 每名球员最近实际出场统计，少于所选场数按实际样本计算；双赛逐场计数。累计分钟门槛仍按所选 GW 的累计样本。短期 xG 等指标无逐场来源，暂不提供。</p>}
-        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{xgUpdatedAt?formatUpdated(xgUpdatedAt):"历史无存档"}<br />每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
+        {shortPeriod&&<p className="chart-window-note">按每支球队最近比赛 / 每名球员最近实际出场统计，少于所选场数按实际样本计算；双赛逐场计数。累计分钟门槛仍按所选 GW 的累计样本。短期 xG、xA、xGI、射门、传中与成功过人无逐场来源，暂不提供。</p>}
+        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{xgUpdatedAt?formatUpdated(xgUpdatedAt):"历史无存档"}<br />{!historical&&players.find(p=>p.attacking)&&<>FotMob 抓取：{formatUpdated(players.find(p=>p.attacking)!.attacking!.updatedAt)}<br/>动作数据抓取：{formatUpdated(players.find(p=>p.attacking)!.attacking!.actionUpdatedAt)}<br/></>}每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。新增 xG/xA/xGI 来自 FotMob，xGI 同源相加；射门、传中、成功过人来自 Statz，均按各自来源场数和分钟计算。</p>
         <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
@@ -415,6 +424,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           <div id="clubs"><RoundFixtures key={active.meta.roundId} calendarFile={data.fixtureMatrixFile} roundId={active.meta.roundId} roundName={active.meta.roundName}/></div>
 
         </section>
+        {data.setPieces&&<SetPieceTable data={data.setPieces}/>}
 
         </div>
         <footer><span>FANTASY EFL DATA BOARD</span><span>官方数据 · GW 赛程</span></footer>

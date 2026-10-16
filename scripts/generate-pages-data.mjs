@@ -1,11 +1,13 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import {attachAttacking,buildSetPieces} from "./attach-attacking-data.mjs";
 import {writeChartHistory} from "./build-chart-history.mjs";
 import { cacheChartAssets } from "./cache-chart-assets.mjs";
 import {historyView,roundLabel,roundFixtures,writeRoundViews,fixtureCalendar,writeFixtureCalendar} from "./build-round-views.mjs";
 
 await import("./update-player-snapshot.mjs");
+await import("./update-fotmob-snapshot.mjs");
 const sourceUrl = new URL("../lib/dashboard-data.ts", import.meta.url);
 const outputUrl = new URL("../pages/dashboard.json", import.meta.url);
 const xgUrl = new URL("../data/xg-snapshot.json", import.meta.url);
@@ -53,6 +55,9 @@ for (const player of data.playerStats) {
   const row = exact.length===1 ? exact[0] : !exact.length && officialUnique && abbreviated.length===1 ? abbreviated[0] : null;
   if(row && row.apps===player.appearances && row.mins>0) { const {name,team,competitionId,...metrics}=row; player.advanced={...metrics,updatedAt:advanced.capturedAt}; matched++; }
 }
+const fotmob=JSON.parse(await readFile(new URL("../data/fotmob-attacking.json",import.meta.url),"utf8"));
+attachAttacking(data,officialSquads,fotmob,advanced);
+data.setPieces=await buildSetPieces(officialSquads,advanced);
 console.log(`Advanced source matched safely: ${matched}/${data.playerStats.length}`);
 const calendar=fixtureCalendar(inputs,snapshot);
 const scoringSource=await readFile(new URL('../lib/fixture-difficulty.ts',import.meta.url),'utf8');
