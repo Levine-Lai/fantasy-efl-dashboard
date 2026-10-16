@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { cacheChartAssets } from "./cache-chart-assets.mjs";
-import {historyView,roundLabel,roundFixtures,writeRoundViews} from "./build-round-views.mjs";
+import {historyView,roundLabel,roundFixtures,writeRoundViews,fixtureCalendar,writeFixtureCalendar} from "./build-round-views.mjs";
 
 await import("./update-player-snapshot.mjs");
 const sourceUrl = new URL("../lib/dashboard-data.ts", import.meta.url);
@@ -53,7 +53,9 @@ for (const player of data.playerStats) {
   if(row && row.apps===player.appearances && row.mins>0) { const {name,team,competitionId,...metrics}=row; player.advanced={...metrics,updatedAt:advanced.capturedAt}; matched++; }
 }
 console.log(`Advanced source matched safely: ${matched}/${data.playerStats.length}`);
-await cacheChartAssets({data,views});
+const calendar=fixtureCalendar(inputs,snapshot);
+await cacheChartAssets({data,views,calendar});
+data.fixtureMatrixFile=await writeFixtureCalendar(calendar);
 data.roundIndex=await writeRoundViews(views,rounds);
 await writeFile(outputUrl, `${JSON.stringify(data)}\n`, "utf8");
 console.log(`Generated ${data.meta.roundName}${next ? ` + ${next.meta.roundName}` : ""} at ${fileURLToPath(outputUrl)}`);

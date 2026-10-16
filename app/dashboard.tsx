@@ -343,7 +343,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
       </header>
 
       <div className="dashboard-shell" id="top">
-        <div className="gw-status" role="status"><strong>{selectedEntry?.name ?? active.meta.roundName}</strong><span>{loading?'正在加载所选 GW…':roundError?roundError:actual?'历史回顾 · 官方实际得分；双赛得分相加':selectedEntry?.state==='current'?'当前 GW · 剩余赛程预期得分，已赛结果见赛程':!selectedEntry?.fixtureCount?'赛程待公布 · 暂无预测':'未来 GW · 按当前样本推演，临近比赛时每日重算'}</span>{roundError&&<button type="button" onClick={()=>setRetry(n=>n+1)}>重试</button>}</div>
+        <div className="gw-status" role="status"><strong>{selectedEntry?.name ?? active.meta.roundName}</strong><span>{loading?'正在加载所选 GW…':roundError?roundError:actual?'历史回顾 · 官方实际得分；双赛得分相加':selectedEntry?.state==='current'?'当前 GW · 剩余赛程预期得分，已赛不计入剩余预测':!selectedEntry?.fixtureCount?'赛程待公布 · 暂无预测':'未来 GW · 按当前样本推演，临近比赛时每日重算'}</span>{roundError&&<button type="button" onClick={()=>setRetry(n=>n+1)}>重试</button>}</div>
         <div className={"gw-content"+(pending?' gw-content-pending':'')} aria-busy={pending} inert={pending}>
         <section className="lead-grid">
           <div className="panel selection-panel">
@@ -399,7 +399,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
             </div>
           </div>
 
-          <RoundFixtures key={active.meta.roundId} fixtures={active.fixtures ?? []} roundName={active.meta.roundName} updatedAt={active.meta.updatedAt}/>
+          <RoundFixtures key={active.meta.roundId} calendarFile={data.fixtureMatrixFile} roundId={active.meta.roundId} roundName={active.meta.roundName}/>
 
         </section>
 

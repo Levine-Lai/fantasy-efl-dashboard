@@ -83,3 +83,19 @@ export async function writeRoundViews(views,rounds) {
   }
   return index;
 }
+
+export function fixtureCalendar(inputs,snapshot) {
+  const normalize=name=>name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').replace('miltonkeynesdons','mkdons');
+  const rows=new Map((snapshot.teams??[]).map(t=>[`${t.competitionId}:${normalize(t.team_name)}`,t]));
+  return {capturedAt:snapshot.capturedAt,teams:inputs.squads.map(team=>{
+    const row=rows.get(`${team.competitionId}:${normalize(team.name)}`);
+    return {id:team.id,name:team.shortName||team.name,fullName:team.name,abbreviation:team.abbreviation||(team.shortName||team.name).slice(0,3).toUpperCase(),logo:team.lightBadge||team.darkBadge||'',competitionId:team.competitionId,overall:row?{played:row.played,xg:row.xg_per_game,xga:row.xga_per_game}:null,home:row?.home,away:row?.away};
+  }),rounds:inputs.rounds.map(round=>({id:round.id,name:roundLabel(round),state:round.status==='completed'?'completed':round.status==='playing'?'current':'future',games:[...round.games].sort((a,b)=>Date.parse(a.date)-Date.parse(b.date)||a.id-b.id).map(({id,homeId,awayId,status})=>({id,homeId,awayId,status}))}))};
+}
+export async function writeFixtureCalendar(calendar) {
+  const json=JSON.stringify(calendar),hash=createHash('sha256').update(json).digest('hex').slice(0,12);
+  const folder=new URL('../public/fixture-matrix/',import.meta.url);await mkdir(folder,{recursive:true});
+  const file=`calendar-${hash}.json`;await writeFile(new URL(file,folder),json);
+  console.log(`FDR calendar: ${Buffer.byteLength(json)} bytes, ${calendar.teams.filter(t=>t.overall).length}/${calendar.teams.length} teams matched`);
+  return './fixture-matrix/'+file;
+}

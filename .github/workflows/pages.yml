@@ -40,6 +40,7 @@ jobs:
       - run: node scripts/test-dashboard-features.mjs
       - run: node scripts/test-personal-data.mjs
       - run: node scripts/test-round-views.mjs
+      - run: node scripts/test-fixture-difficulty.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
           path: pages-dist
