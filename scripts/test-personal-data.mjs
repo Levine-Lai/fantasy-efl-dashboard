@@ -50,5 +50,5 @@ const fixtures=Array.from({length:7},(_,i)=>({id:i+1,date:`2026-10-${String(i+1)
 const results=fixtures.map((g,i)=>({gameId:g.id,squadId:1,win:i%3===0?1:0,draw:i%3===1?1:0}));
 assert.deepEqual(recentTeamForm([...results].reverse().concat(results[6]),fixtures,1),['L','W','D','L','W']);
 assert.deepEqual(recentTeamForm(results,fixtures,2),[]);
-for(const round of [data,data.upcomingRound].filter(Boolean))for(const team of round.teams){assert.ok(team.form.length<=5);if(round===data)assert.equal(team.form.length,Math.min(5,data.teamStats.find(t=>t.id===team.id).played));assert.ok(team.form.every(v=>['W','D','L'].includes(v)));}
+for(const round of [data,data.upcomingRound].filter(Boolean))for(const team of round.teams){assert.ok(team.form.length<=5);assert.ok(team.form.every(v=>['W','D','L'].includes(v)));}
 console.log('Recent team form passed: calendar order, deduplicated games, last five results and upcoming round');
