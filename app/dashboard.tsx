@@ -78,6 +78,9 @@ function applicableStat(key: StatKey, position: string) {
 function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:number }) {
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("ALL");
+  const [team, setTeam] = useState("ALL");
+  const teamKey=(player:PlayerStat)=>`${player.competitionId}:${player.team}`;
+  const teamOptions=useMemo(()=>[...new Map(players.filter(p=>includesLeague(competition,p.competitionId)).map(p=>[`${p.competitionId}:${p.team}`,{key:`${p.competitionId}:${p.team}`,name:p.team,logo:p.teamLogo}])).values()].sort((a,b)=>a.name.localeCompare(b.name)),[players,competition]);
   const [position, setPosition] = useState("OUT");
   const [minimum, setMinimum] = useState(roundId<=2?1:3);
   const [sortKey, setSortKey] = useState<StatKey | "appearances">("points");
@@ -86,12 +89,12 @@ function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:numbe
   const columns = statColumns.filter(({ key }) => position === "ALL" || (position === "OUT" ? !keeperOnly.has(key) : applicableStat(key, position)));
   const effectiveSortKey = sortKey === "appearances" || columns.some(column => column.key === sortKey) ? sortKey : "points";
   const filtered = useMemo(() => players
-    .filter((player) => player.appearances >= minimum && includesLeague(competition, player.competitionId) && (position === "ALL" || position === "OUT" && player.position !== "GK" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((player) => (team === "ALL" || teamKey(player) === team) && player.appearances >= minimum && includesLeague(competition, player.competitionId) && (position === "ALL" || position === "OUT" && player.position !== "GK" || player.position === position) && `${player.fullName} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
       const left = effectiveSortKey === "appearances" ? a.appearances : a.perGame[effectiveSortKey];
       const right = effectiveSortKey === "appearances" ? b.appearances : b.perGame[effectiveSortKey];
       return (descending ? right - left : left - right) || b.appearances - a.appearances || a.fullName.localeCompare(b.fullName);
-    }), [players, minimum, competition, position, query, effectiveSortKey, descending]);
+    }), [players, minimum, competition, team, position, query, effectiveSortKey, descending]);
   const colorRanks = useMemo(()=>{
     const result=new Map<string,number>();
     const pool=players.filter(p=>p.appearances>=minimum && includesLeague(competition,p.competitionId));
@@ -123,7 +126,8 @@ function StatsTable({ players, roundId }: { players: PlayerStat[]; roundId:numbe
       <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>球员场均数据</h2></div><span>Fantasy EFL 官方比赛数据</span></div>
       <div className="stats-toolbar">
         <label><span>搜索</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="球员或球队" /></label>
-        <label><span>联赛级别</span><FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setPage(0); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
+        <label><span>联赛级别</span><FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setTeam("ALL"); setPage(0); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
+        <label className="stats-team-filter"><span>球队</span><FilterSelect aria-label="球员场均数据球队" value={team} onValueChange={value=>{setTeam(value);setPage(0);}}><option value="ALL">全部球队</option>{teamOptions.map(item=><option key={item.key} value={item.key}><span className="team-select-option"><img src={item.logo} alt="" loading="lazy"/>{item.name}</span></option>)}</FilterSelect></label>
         <label><span>位置</span><FilterSelect value={position} onValueChange={(value) => { setPosition(value); setPage(0); }}><option value="OUT">非门将</option><option value="ALL">全部位置</option>{positions.map((item) => <option key={item} value={item}>{positionName[item]}</option>)}</FilterSelect></label>
         <label><span>至少出场</span><FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setPage(0); }}><option value={1}>1 场</option><option value={3}>3 场</option><option value={5}>5 场</option></FilterSelect></label>
         <span className="stats-count">{filtered.length} 人</span>

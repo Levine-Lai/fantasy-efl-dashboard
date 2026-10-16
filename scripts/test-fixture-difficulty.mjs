@@ -71,3 +71,11 @@ if(selected.state!=='completed'){
  for(const t of dashboard.teams)assert.equal(t.score,Number(ranked.find(r=>r.id===t.id).score.toFixed(1)));
 }
 console.log('Generated club recommendations equal shared fixture expectations.');
+
+assert.equal(gameweekOpportunity([{attack:80,defense:10},{attack:40,defense:90}],'attack'),60);
+assert.equal(gameweekOpportunity([{attack:80,defense:10},{attack:40,defense:90}],'defense'),50);
+assert.equal(fixtureDifficulty({...own,overall:{...own.overall,xga:3}},opponent,true,league).attack,base.attack,'Attack ignores own defending');
+assert.equal(fixtureDifficulty(own,{...opponent,overall:{...opponent.overall,xg:3}},true,league).attack,base.attack,'Attack ignores opponent attacking');
+assert.equal(fixtureDifficulty({...own,overall:{...own.overall,xg:3}},opponent,true,league).defense,base.defense,'Defense ignores own attacking');
+assert.equal(fixtureDifficulty(own,{...opponent,overall:{...opponent.overall,xga:3}},true,league).defense,base.defense,'Defense ignores opponent defending');
+console.log('Directional fixture rankings passed: attack and defense are isolated, doubles averaged.');

@@ -777,3 +777,8 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
 
 .merged-teams .fdr-panel>.section-heading,.merged-teams .fdr-toolbar,.merged-teams .fdr-controls,.merged-teams .fdr-legend,.merged-teams .fixture-guide{max-width:1160px;margin-left:auto;margin-right:auto}
 @media(min-width:901px){.merged-teams .fdr-toolbar{grid-template-columns:220px 280px}}
+
+.stats-team-filter{min-width:180px;max-width:240px}
+.fdr-secondary-points{margin-top:6px;font-size:10px!important}
+.fdr-modes button:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:640px){.stats-team-filter{min-width:0;max-width:none}}
