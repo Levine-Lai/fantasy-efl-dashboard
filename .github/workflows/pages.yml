@@ -32,8 +32,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: data/player-advanced.json
-          key: ${{ runner.os }}-advanced-player-v1-${{ github.run_id }}
-          restore-keys: ${{ runner.os }}-advanced-player-v1-
+          key: ${{ runner.os }}-advanced-player-v2-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-advanced-player-v2-
       - run: node scripts/test-round-selection.mjs
       - run: npm run build
       - run: node scripts/test-chart-data.mjs
