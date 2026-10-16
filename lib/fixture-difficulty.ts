@@ -1,6 +1,6 @@
 export type FdrRates={played:number;xg:number;xga:number};
 export type FdrTeam={id:number;name:string;fullName:string;abbreviation:string;logo:string;competitionId:number;overall:FdrRates|null;home?:FdrRates;away?:FdrRates};
-export type FdrRound={id:number;name:string;state:'completed'|'current'|'future';games:{id:number;homeId:number;awayId:number;status:string}[]};
+export type FdrRound={id:number;name:string;state:'completed'|'current'|'future';actualPoints?:Record<number,number>;games:{id:number;homeId:number;awayId:number;status:string}[]};
 export type FdrCalendar={teams:FdrTeam[];rounds:FdrRound[];capturedAt:string};
 export type FdrMode='overall'|'attack'|'defense';
 export type FdrResult={xg:number;xga:number;attack:number;defense:number;overall:number;ownAttackIndex:number;ownDefenseIndex:number;opponentAttackIndex:number;opponentDefenseIndex:number;venueSamples:number};
@@ -50,4 +50,22 @@ export function loadFixtureCalendar(file:string) {
   let request=calendars.get(file);
   if(!request){request=fetch(new URL(file,document.baseURI)).then(async response=>{if(!response.ok)throw new Error('赛程矩阵加载失败，请重试或刷新页面');const result=await response.json() as FdrCalendar;if(!Array.isArray(result.teams)||!Array.isArray(result.rounds))throw new Error('赛程数据不完整');return result;}).catch(error=>{calendars.delete(file);throw error;});calendars.set(file,request);}
   return request;
+}
+
+// Independent Poisson goals: expectations of the official club scoring events.
+export function expectedTeamPoints(result:Pick<FdrResult,'xg'|'xga'>|null,home:boolean) {
+  if(!result||![result.xg,result.xga].every(n=>Number.isFinite(n)&&n>=0))return null;
+  const poisson=(lambda:number)=>{const values=[Math.exp(-lambda)];let mass=values[0];for(let k=1;k<200&&(k<lambda||1-mass>1e-12);k++){values.push(values[k-1]*lambda/k);mass+=values[k];}return values;};
+  const a=poisson(result.xg),b=poisson(result.xga);
+  let win=0,draw=0,below=0;
+  for(let i=0;i<a.length;i++){win+=a[i]*below;draw+=a[i]*(b[i]??0);below+=b[i]??0;}
+  const cleanSheet=Math.exp(-result.xga),twoGoals=1-Math.exp(-result.xg)*(1+result.xg);
+  const fourGoals=Math.max(0,1-a.slice(0,4).reduce((sum,p)=>sum+p,0));
+  const total=(home?5:7)*win+3*draw+2*cleanSheet+2*twoGoals+2*fourGoals;
+  return {total,win,draw,cleanSheet,twoGoals,fourGoals};
+}
+export function gameweekExpectedPoints(matches:{result:Pick<FdrResult,'xg'|'xga'>|null;home:boolean}[]):number|null {
+  if(!matches.length)return null;
+  const scores=matches.map(match=>expectedTeamPoints(match.result,match.home));
+  return scores.some(score=>score==null)?null:scores.reduce((sum,score)=>sum+score!.total,0);
 }

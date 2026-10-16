@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import ts from 'typescript';
 const source=await readFile(new URL('../lib/fixture-difficulty.ts',import.meta.url),'utf8');
-const {fixtureDifficulty,difficultyBand,gameweekOpportunity}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64'));
+const {fixtureDifficulty,difficultyBand,gameweekOpportunity,expectedTeamPoints,gameweekExpectedPoints}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64'));
 assert.equal(gameweekOpportunity([{overall:80},{overall:40}]),60,'Double fixtures are averaged, not summed');
 assert.ok(gameweekOpportunity([{overall:75}])>gameweekOpportunity([{overall:50},{overall:50}]),'Quantity must not override easier difficulty');
 assert.equal(gameweekOpportunity([]),null);
@@ -45,3 +45,29 @@ for(const round of calendar.rounds)for(const game of round.games){
   for(const key of ['attack','defense','overall'])assert.ok(result[key]>=0&&result[key]<=100);
 }
 console.log('FDR checks passed: balanced danger, both own strengths, sample shrinkage, venue reciprocity, missing sources, all 72 teams and compact fixture payload');
+
+const equal=expectedTeamPoints({xg:1.5,xga:1.5},true);
+assert.ok(equal.win>0&&equal.win<1&&equal.draw>0);
+assert.ok(Math.abs(2*equal.win+equal.draw-1)<1e-10);
+assert.ok(Math.abs(expectedTeamPoints({xg:1.5,xga:1.5},false).total-equal.total-2*equal.win)<1e-10,'Away victory bonus');
+assert.ok(expectedTeamPoints({xg:2.5,xga:1.5},true).total>equal.total);
+assert.ok(expectedTeamPoints({xg:1.5,xga:.5},true).total>equal.total);
+assert.equal(expectedTeamPoints({xg:0,xga:0},true).total,5,'0-0: draw and clean sheet');
+assert.equal(expectedTeamPoints(null,true),null);
+assert.equal(gameweekExpectedPoints([]),null);
+assert.equal(gameweekExpectedPoints([{result:null,home:true}]),null);
+assert.equal(gameweekExpectedPoints([{result:{xg:1.5,xga:1.5},home:true},{result:{xg:1.5,xga:1.5},home:true}]),2*equal.total,'Double GW sums expected points');
+console.log('Official club expectation model: probabilities, bonuses, monotonicity and double GW passed.');
+
+const dashboard=JSON.parse(await readFile(new URL('../pages/dashboard.json',import.meta.url),'utf8'));
+const generated=JSON.parse(await readFile(new URL('../public/'+dashboard.fixtureMatrixFile.replace(/^\.\//,''),import.meta.url),'utf8'));
+const selected=generated.rounds.find(r=>r.id===dashboard.meta.roundId);
+if(selected.state!=='completed'){
+ const ranked=generated.teams.flatMap(team=>{
+  const matches=selected.games.filter(g=>!['completed','postponed','cancelled'].includes(g.status)&&(g.homeId===team.id||g.awayId===team.id)).map(g=>{const home=g.homeId===team.id;return {home,result:fixtureDifficulty(team,generated.teams.find(t=>t.id===(home?g.awayId:g.homeId)),home,generated.teams)};});
+  const score=gameweekExpectedPoints(matches);return score==null?[]:[{id:team.id,score}];
+ }).sort((a,b)=>b.score-a.score);
+ assert.deepEqual(dashboard.teams.map(t=>t.id),ranked.map(t=>t.id),'Header recommendations and fixture rankings agree');
+ for(const t of dashboard.teams)assert.equal(t.score,Number(ranked.find(r=>r.id===t.id).score.toFixed(1)));
+}
+console.log('Generated club recommendations equal shared fixture expectations.');

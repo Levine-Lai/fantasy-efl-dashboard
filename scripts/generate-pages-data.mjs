@@ -54,6 +54,38 @@ for (const player of data.playerStats) {
 }
 console.log(`Advanced source matched safely: ${matched}/${data.playerStats.length}`);
 const calendar=fixtureCalendar(inputs,snapshot);
+const scoringSource=await readFile(new URL('../lib/fixture-difficulty.ts',import.meta.url),'utf8');
+const {fixtureDifficulty,gameweekExpectedPoints}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(scoringSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64'));
+let checked=0;
+for(const [id,live] of lives){
+  const validIds=new Set(rounds.find(r=>r.id===id).games.filter(g=>g.status==='completed'&&g.isFinalized).map(g=>g.id));
+  for(const row of live.squads.filter(r=>validIds.has(r.gameId))){
+    const expected=5*row.win+3*row.draw+2*row.awayWin+2*row.cleanSheet+2*(row.goalsScored>=2)+2*(row.goalsScored>=4);
+    if(expected!==row.points)throw new Error(`Official club scoring mismatch: GW${id} club ${row.squadId}`);
+    checked++;
+  }
+}
+for(const round of calendar.rounds){
+  const officialRound=rounds.find(r=>r.id===round.id);
+  const finalized=new Set(officialRound.games.filter(g=>g.status==='completed'&&g.isFinalized).map(g=>g.id));
+  round.actualPoints={};
+  for(const row of lives.get(round.id)?.squads??[])if(finalized.has(row.gameId))round.actualPoints[row.squadId]=(round.actualPoints[row.squadId]??0)+row.points;
+}
+for(const view of views.filter(v=>v.scoreKind!=='actual')){
+  const round=calendar.rounds.find(r=>r.id===view.meta.roundId);
+  const remaining=round.games.filter(g=>!['completed','postponed','cancelled'].includes(g.status));
+  view.teams=calendar.teams.flatMap(team=>{
+    const games=remaining.filter(g=>g.homeId===team.id||g.awayId===team.id);
+    if(!games.length)return [];
+    const matches=games.map(g=>{const home=g.homeId===team.id;const opponent=calendar.teams.find(t=>t.id===(home?g.awayId:g.homeId));return {home,opponent,result:fixtureDifficulty(team,opponent,home,calendar.teams)};});
+    const score=gameweekExpectedPoints(matches);
+    if(score==null)return [];
+    const fixtureBadges=matches.map(m=>({label:m.home?'主':'客',opponent:m.opponent.name,opponentLogo:m.opponent.logo}));
+    return [{id:team.id,name:team.fullName,logo:team.logo,score:score,fixtures:fixtureBadges.map(f=>`${f.label} ${f.opponent}`),fixtureBadges,form:[],leaguePosition:null,projectedXg:null,projectedXga:null}];
+  }).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name)).map(team=>({...team,score:Number(team.score.toFixed(1))}));
+}
+data.teams=views.find(v=>v.meta.roundId===data.meta.roundId).teams;
+console.log(`Official club scoring verified: ${checked} finalized team results; predictions use fixture Poisson expectations.`);
 await cacheChartAssets({data,views,calendar});
 data.fixtureMatrixFile=await writeFixtureCalendar(calendar);
 data.roundIndex=await writeRoundViews(views,rounds);

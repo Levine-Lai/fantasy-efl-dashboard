@@ -708,3 +708,30 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
   #stats, #team-stats, #clubs, #news, #personal, #recommendations, #chart { scroll-margin-top:120px; }
   footer { flex-wrap:wrap; gap:10px; line-height:1.7; }
 }
+
+/* Combined club selection: crest + final points, fixture detail uses remaining width. */
+.lower-grid.merged-teams{grid-template-columns:minmax(0,1fr)}
+.merged-teams>div{min-width:0;scroll-margin-top:90px}
+.merged-teams .round-fixtures{padding:20px}
+.merged-teams .fdr-single .fdr-team-col{width:100px;min-width:100px;text-align:center}
+.merged-teams .fdr-single tbody .fdr-team-col{display:table-cell;vertical-align:middle}
+.merged-teams .fdr-team-col img{display:block;width:38px;height:38px;object-fit:contain;margin:0 auto 8px}
+.merged-teams .fdr-total-points{display:block;font-size:23px;font-variant-numeric:tabular-nums;line-height:1.3}
+.merged-teams .fdr-team-col>small{display:block;font-size:11px;color:#68859c}
+.merged-teams .fdr-opponent{position:relative;min-height:98px;padding:12px}
+.merged-teams .fdr-match-points{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;align-items:flex-end}
+.merged-teams .fdr-match-points b{font-size:22px;line-height:1.2}
+.merged-teams .fdr-match-points small{font-size:10px}
+.merged-teams .fdr-opponent-identity{padding-right:65px}
+.merged-teams .fdr-match-rates{display:none}
+.merged-teams .fdr-match-signals{margin-top:8px}
+@media(max-width:640px){
+ .merged-teams .round-fixtures{padding:12px}
+ .merged-teams .fdr-single .fdr-team-col{width:76px;min-width:76px;padding:8px 4px}
+ .merged-teams .fdr-total-points{font-size:21px}
+ .merged-teams .fdr-opponent{padding:10px;min-height:102px}
+ .merged-teams .fdr-match-points{right:8px;top:10px}
+ .merged-teams .fdr-match-points b{font-size:20px}
+ .merged-teams .fdr-opponent-identity{padding-right:54px}
+ .merged-teams>div{scroll-margin-top:120px}
+}

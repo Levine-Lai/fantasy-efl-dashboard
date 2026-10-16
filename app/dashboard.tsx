@@ -362,7 +362,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               </div>)}
             </div>
             <div className="team-picks-heading"><Trophy size={16} /><strong>{actual?"高分球队":"推荐球队"}</strong><span>选择 2 队</span></div>
-            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong>{!actual&&<small>联赛第 {team.leaguePosition ?? "—"}</small>}<FixtureBadges fixtures={team.fixtureBadges} /></div><b title={actual?"本轮官方实际得分":"球队综合推荐分"}>{team.score}</b></article>)}</div>
+            <div className="team-picks">{active.teams.slice(0, 2).map((team, index) => <article className="team-pick" key={team.id}><span className="team-pick-rank">0{index + 1}</span><RichImage className="team-pick-logo" src={team.logo} alt={`${team.name} 队徽`} /><div className="team-pick-main"><strong>{team.name}</strong><FixtureBadges fixtures={team.fixtureBadges} /></div><b title={actual?"本轮官方实际得分":"本轮剩余赛程预期得分"}>{team.score}</b></article>)}</div>
           </div>
           <section className="panel recommendations" id="recommendations">
           <div className="section-heading wide-heading"><div><Crosshair size={18} /><h2>{active.meta.roundName} 球员{scoreLabel}</h2></div><span>截止 {lockout}</span></div>
@@ -386,20 +386,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <StatsTable key={"stats-"+active.meta.roundId} players={playerStats} roundId={active.meta.roundId} />
         <TeamStatsTable key={"teams-"+active.meta.roundId} teams={teamStats} />
 
-        <section className="lower-grid">
-          <div className="panel" id="clubs">
-            <div className="section-heading"><div><Trophy size={18} /><h2>{actual?"球队实际得分":"球队选择"}</h2></div><span>前 {active.teams.length} 队</span></div>
-            <p className="team-model-note">{actual?"按本 GW 官方已结算积分排序，双赛相加。近5场截至该轮；不显示今天的排名或 xG。":"推荐分：排名差 15% · 对阵预期进球 35% · 对阵预期失球 35% · 历史胜率 15%。逐场计算，双赛相加；推荐指数，不等于官方 Fantasy 积分。"}</p><div className="club-list">
-              {active.teams.map((team, index) => (
-                <article className="club-row" key={team.id}>
-                  <span className="club-rank">{index + 1}</span><RichImage className="club-logo" src={team.logo} alt={`${team.name} 队徽`} /><div><strong>{team.name}</strong><small>{team.leaguePosition?`联赛第 ${team.leaguePosition} · `:""}{team.fixtures.join(" · ")}</small>{!actual&&<small>xG {team.projectedXg?.toFixed(2) ?? "—"} / xGA {team.projectedXga?.toFixed(2) ?? "—"}</small>}</div>
-                  <div className="club-form" aria-label={`最近 ${team.form.length} 场，由旧到新：${team.form.join(" ")}`}><span className="club-form-label">近5场</span>{team.form.map((item, i) => <i className={`form-${item}`} title={item==="W"?"胜":item==="L"?"负":"平"} key={`${item}-${i}`}>{item}</i>)}</div><b>{team.score}</b>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <RoundFixtures key={active.meta.roundId} calendarFile={data.fixtureMatrixFile} roundId={active.meta.roundId} roundName={active.meta.roundName}/>
+        <section className="lower-grid merged-teams">
+          <div id="clubs"><RoundFixtures key={active.meta.roundId} calendarFile={data.fixtureMatrixFile} roundId={active.meta.roundId} roundName={active.meta.roundName}/></div>
 
         </section>
 
