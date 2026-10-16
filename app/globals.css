@@ -735,3 +735,45 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
  .merged-teams .fdr-opponent-identity{padding-right:54px}
  .merged-teams>div{scroll-margin-top:120px}
 }
+
+/* Compact fixtures alongside analysis; tablet/mobile expand detail at its own row. */
+.fdr-workspace{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;max-width:1160px;margin:18px auto 0;align-items:start}
+.fdr-list-pane{min-width:0}
+.fdr-analysis-pane{position:sticky;top:88px;min-width:0}
+.fdr-analysis-pane .fdr-detail{margin:0;padding:18px}
+.fdr-analysis-empty{padding:28px 22px;border:1px dashed #cbdde7;border-radius:12px;background:#f7fbfd;color:#668396;line-height:1.8}
+.fdr-analysis-empty h3{margin:8px 0;color:var(--prussian);font-size:16px}
+.fdr-analysis-empty p{font-size:13px;margin:8px 0 18px}
+.fdr-analysis-empty small{font-size:11px}
+.fdr-inline-row{display:none}
+.fdr-analysis-eyebrow{display:block;font-size:11px;color:#68859c;margin-bottom:10px}
+.fdr-detail>.fdr-analysis-title{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:0;font-size:14px;line-height:1.5}
+.fdr-analysis-title img{width:25px;height:25px;object-fit:contain}
+.fdr-analysis-title>span{font-size:10px;color:#8aa0af;margin:0 2px;font-weight:400}
+.fdr-analysis-total{display:flex;justify-content:space-between;align-items:center;margin:16px 0 12px;background:white;border:1px solid #d8e6ee;border-radius:10px;padding:10px 14px;font-size:12px}
+.fdr-analysis-total b{font-size:28px;line-height:1.2}
+.fdr-analysis-rates{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.fdr-analysis-rates>span{display:flex;align-items:center;justify-content:space-between;background:white;border:1px solid #e0eaf0;border-radius:8px;padding:7px 10px;font-size:11px}
+.fdr-analysis-rates b{font-size:16px}
+.fdr-detail h4{font-size:12px;margin:18px 0 7px}
+.fdr-breakdown,.fdr-index-table{background:white;border:1px solid #dce7ee;border-radius:9px;overflow:hidden;margin-bottom:12px}
+.fdr-breakdown>div,.fdr-index-table>div{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:5px;padding:6px 10px;border-bottom:1px solid #edf2f6;font-size:12px;align-items:center}
+.fdr-breakdown>div:last-child,.fdr-index-table>div:last-child{border-bottom:0}
+.fdr-breakdown>div>*:not(:first-child),.fdr-index-table>div>*:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.fdr-breakdown-heading,.fdr-index-table>div:first-child{background:#edf5f9;color:#68859c;font-size:10px!important}
+.merged-teams .fdr-workspace .fdr-single .fdr-team-col{width:86px;min-width:86px}
+.merged-teams .fdr-workspace .fdr-opponent{min-height:104px;padding:10px}
+.merged-teams .fdr-workspace .fdr-match-points{right:10px;top:10px}
+@media(min-width:901px){.merged-teams .fdr-workspace .fdr-opponents:not(.fdr-double){max-width:calc(50% - 4px)}}
+@media(max-width:1100px) and (min-width:901px){.fdr-workspace{grid-template-columns:minmax(0,1fr) 300px;gap:14px}}
+@media(max-width:900px){
+ .fdr-workspace{display:block;margin-top:12px}
+ .fdr-analysis-pane{display:none}
+ .fdr-inline-row{display:table-row}
+ .fdr-inline-row>td{padding:8px!important;background:#fff}
+ .fdr-inline-row .fdr-detail{margin:0;padding:14px}
+ .merged-teams .fdr-workspace .fdr-single .fdr-team-col{width:76px;min-width:76px}
+}
+
+.merged-teams .fdr-panel>.section-heading,.merged-teams .fdr-toolbar,.merged-teams .fdr-controls,.merged-teams .fdr-legend,.merged-teams .fixture-guide{max-width:1160px;margin-left:auto;margin-right:auto}
+@media(min-width:901px){.merged-teams .fdr-toolbar{grid-template-columns:220px 280px}}
