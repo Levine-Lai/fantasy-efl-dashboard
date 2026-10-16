@@ -41,6 +41,10 @@ export function difficultyBand(score:number|null) {
   if(score==null)return 0;
   return score>=70?1:score>=58?2:score>=42?3:score>=30?4:5;
 }
+export function gameweekOpportunity(results:(FdrResult|null)[]):number|null {
+  if(!results.length||results.some(result=>result==null))return null;
+  return results.reduce((sum,result)=>sum+result!.overall,0)/results.length;
+}
 const calendars=new Map<string,Promise<FdrCalendar>>();
 export function loadFixtureCalendar(file:string) {
   let request=calendars.get(file);

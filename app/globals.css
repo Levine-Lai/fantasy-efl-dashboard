@@ -84,7 +84,7 @@ a { color: inherit; text-decoration: none; }
 .fixture-center small { font-size:10px; color:#7891a1; }
 .fixture-center .fixture-live { color:#217c51; }
 .fixture-withdrawn { opacity:.55; }
-.fdr-toolbar { display:grid; grid-template-columns:1fr minmax(0,1.15fr) 82px; gap:8px; margin-top:16px; }
+.fdr-toolbar { display:grid; grid-template-columns:1fr minmax(0,1.15fr); gap:8px; margin-top:16px; }
 .fdr-toolbar .filter-select-trigger { font-size:12px; padding:8px; min-height:38px; }
 .fdr-search { min-width:0; }
 .fdr-search input { width:100%; min-width:0; height:100%; border:1px solid var(--border); border-radius:10px; padding:8px 10px; font:inherit; font-size:12px; background:white; color:var(--prussian); }
@@ -110,14 +110,27 @@ a { color: inherit; text-decoration: none; }
 .fdr-table thead .fdr-team-col { z-index:4; background:#edf4f8; }
 .fdr-team-col img { display:inline-block; width:22px; height:22px; object-fit:contain; margin-right:6px; vertical-align:middle; }
 .fdr-team-col span { display:inline-block; max-width:calc(100% - 28px); vertical-align:middle; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.fdr-table.fdr-five { min-width:550px; }
-.fdr-five .fdr-team-col { width:120px; }
 .fdr-opponents { display:flex; flex-direction:column; gap:5px; }
 .fdr-opponent { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:48px; padding:6px 3px; border:1px solid transparent; border-radius:7px; font:inherit; cursor:pointer; }
 .fdr-opponent > span { display:inline-flex; align-items:center; gap:5px; }
 .fdr-opponent img { width:18px; height:18px; object-fit:contain; }
 .fdr-opponent b { font-size:11px; letter-spacing:.03em; }
 .fdr-opponent small { font-size:10px; opacity:.8; }
+.fdr-single .fdr-opponents { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }
+.fdr-single .fdr-double { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.fdr-single .fdr-opponent { display:grid; grid-template-columns:minmax(0,1fr); justify-items:stretch; gap:6px; padding:10px; text-align:left; }
+.fdr-single .fdr-opponent-identity { display:flex; align-items:center; gap:7px; }
+.fdr-single .fdr-opponent-identity img { width:23px; height:23px; flex-shrink:0; }
+.fdr-single .fdr-opponent-identity b { font-size:13px; letter-spacing:0; overflow-wrap:anywhere; }
+.fdr-single .fdr-venue { font-size:10px; }
+.fdr-single .fdr-match-rates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; border-top:1px solid #00315310; padding-top:6px; }
+.fdr-match-rates > span { display:flex; flex-direction:column; gap:3px; }
+.fdr-single .fdr-match-rates b { font-size:16px; font-variant-numeric:tabular-nums; }
+.fdr-single .fdr-match-signals { display:flex; flex-wrap:wrap; gap:5px; }
+.fdr-match-signals small { border:1px solid #00315310; border-radius:5px; padding:3px 6px; opacity:1; }
+.fdr-single .fdr-match-missing { line-height:1.7; }
+.fdr-single .fdr-team-col span { white-space:normal; overflow-wrap:anywhere; }
+.fdr-week-grade { display:block; width:fit-content; margin-top:7px; padding:3px 5px; border-radius:5px; font-size:10px; font-weight:500; white-space:nowrap; }
 .fdr-opponent:hover,.fdr-opponent:focus-visible,.fdr-opponent[aria-pressed="true"] { outline:2px solid #759ab3; outline-offset:1px; }
 .fdr-double-label { display:block; margin-bottom:4px; font-size:9px; color:#668396; }
 .fdr-blank { display:grid; place-items:center; min-height:48px; font-size:10px; color:#96a4b2; }
@@ -149,7 +162,7 @@ a { color: inherit; text-decoration: none; }
   .fixture-side { font-size:12px; gap:4px; }
   .fixture-side span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .fixture-side img { width:21px; height:21px; }
-  .fdr-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 70px; gap:6px; }
+  .fdr-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px; }
   .fdr-search input { font-size:16px; padding-inline:7px; }
   .fdr-controls { align-items:center; }
   .fdr-modes button { padding-inline:12px; }
@@ -160,7 +173,10 @@ a { color: inherit; text-decoration: none; }
   .fdr-team-col span { max-width:calc(100% - 22px); }
   .fdr-opponent img { width:16px; height:16px; }
   .fdr-opponent > span { gap:3px; }
-  .fdr-five .fdr-team-col { width:110px; }
+  .fdr-single .fdr-double { grid-template-columns:minmax(0,1fr); }
+  .fdr-single .fdr-opponent { padding:9px; }
+  .fdr-single .fdr-opponent-identity b { font-size:12px; }
+  .fdr-single .fdr-team-col { width:30%; }
   .double-badge { font-size:9px; padding:0 2px; }
   #fixtures { scroll-margin-top:120px; }
 }
