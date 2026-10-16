@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const source=await readFile(new URL('../lib/chart-history.ts',import.meta.url),'utf8');
+const {recentChartStats}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64'));
+const p={id:1,appearances:20,xg90:2,goals90:0,advanced:{mins:900},perGame:{points:0}};
+const t={id:9,played:20,xgPerGame:2};
+const history={rounds:[1,2,3],keys:['points','minutesPlayed','goalsScored','assists'],players:{1:[[3,400,4,20,90,3,0],[2,300,3,6,30,1,0],[1,100,1,2,90,0,0],[2,200,2,4,60,0,1]]},teams:{9:[[3,400,4,11,4,0,1,0,1],[2,300,3,7,2,1,1,0,0],[1,100,1,3,1,1,0,1,0],[2,200,2,0,0,2,0,0,0]]}};
+const one=recentChartStats(history,2,1,[p],[t]);
+assert.equal(one.players[0].perGame.points,6,'Latest match by date, no future GW leakage');
+assert.equal(one.players[0].goals90,3,'Per90 uses selected minutes');
+assert.equal(one.teams[0].goalsPerGame,2);
+assert.equal(one.teams[0].winRate,100);
+const three=recentChartStats(history,2,3,[p],[t]);
+assert.equal(three.players[0].appearances,3,'A double counts as two matches');
+assert.equal(three.players[0].perGame.points,4);
+assert.equal(three.players[0].goals90,.5,'Aggregate minutes, not mean of per-match per90');
+assert.equal(three.teams[0].goalsAgainstPerGame,4/3);
+assert.equal(three.teams[0].pointsPerGame,4/3);
+assert.equal(three.players[0].xg90,null);
+assert.equal(three.players[0].advanced,undefined);
+assert.equal(three.teams[0].xgPerGame,null,'Never use season xG as short-window xG');
+assert.equal(recentChartStats(history,1,7,[p],[t]).players[0].appearances,1,'Insufficient history uses actual sample');
+assert.equal(recentChartStats(history,0,7,[p],[t]).players.length,0,'Unknown cutoff has no sample');
+assert.equal(p.appearances,20,'Source objects remain unchanged');
+const data=JSON.parse(await readFile(new URL('../pages/dashboard.json',import.meta.url),'utf8'));
+const generated=JSON.parse(await readFile(new URL('../public/'+data.chartHistoryFile.replace(/^\.\//,''),import.meta.url),'utf8'));
+assert.equal(Object.keys(generated.teams).length,72);
+for(const target of [generated.players,generated.teams])for(const rows of Object.values(target)){
+ assert.equal(new Set(rows.map(r=>r[2])).size,rows.length,'Deduplicate games per entity');
+ assert.ok(rows.every(r=>r.every(Number.isFinite)));
+}
+console.log('Recent chart windows passed: chronological last N, double fixtures, GW cutoff, weighted per90, actual samples, absent short xG and 72 teams.');

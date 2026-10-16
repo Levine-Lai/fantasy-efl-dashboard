@@ -782,3 +782,6 @@ footer { display: flex; justify-content: space-between; padding: 28px 4px 0; fon
 .fdr-secondary-points{margin-top:6px;font-size:10px!important}
 .fdr-modes button:disabled{opacity:.4;cursor:not-allowed}
 @media(max-width:640px){.stats-team-filter{min-width:0;max-width:none}}
+
+.chart-period-label{display:inline-block;margin-left:10px;font-size:12px;font-weight:500;color:#668396}
+.chart-window-note{font-size:11px;line-height:1.7;color:#557489;background:#f4f9fc;padding:10px;border-radius:8px;margin:12px 0}

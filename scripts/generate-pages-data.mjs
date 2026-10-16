@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import {writeChartHistory} from "./build-chart-history.mjs";
 import { cacheChartAssets } from "./cache-chart-assets.mjs";
 import {historyView,roundLabel,roundFixtures,writeRoundViews,fixtureCalendar,writeFixtureCalendar} from "./build-round-views.mjs";
 
@@ -88,6 +89,7 @@ data.teams=views.find(v=>v.meta.roundId===data.meta.roundId).teams;
 console.log(`Official club scoring verified: ${checked} finalized team results; predictions use fixture Poisson expectations.`);
 await cacheChartAssets({data,views,calendar});
 data.fixtureMatrixFile=await writeFixtureCalendar(calendar);
+data.chartHistoryFile=await writeChartHistory(inputs,statKeys);
 data.roundIndex=await writeRoundViews(views,rounds);
 await writeFile(outputUrl, `${JSON.stringify(data)}\n`, "utf8");
 console.log(`Generated ${data.meta.roundName}${next ? ` + ${next.meta.roundName}` : ""} at ${fileURLToPath(outputUrl)}`);

@@ -7,3 +7,5 @@ pages/dashboard.json
 public/chart-assets/
 public/round-data/
 public/fixture-matrix/
+
+/public/chart-history/

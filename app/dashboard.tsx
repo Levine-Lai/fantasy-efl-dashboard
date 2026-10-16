@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, ChartScatter, Crosshair, Sparkles, Trophy } from "lucide-react";
+import {loadChartHistory,recentChartStats} from "@/lib/chart-history";
+import type {ChartHistory} from "@/lib/chart-history";
 import { RoundFixtures } from "./round-fixtures";
 import { defaultRound, loadRound } from "@/lib/round-view";
 import { TeamStatsTable } from "./team-stats-table";
@@ -148,7 +150,7 @@ function formatUpdated(value: string) { return value ? new Intl.DateTimeFormat("
 
 type AnalyticsDatum = { id: string; name: string; image: string; x: number; y: number; subtitle: string; detail: string };
 
-function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, historical=false }: { players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string; historical?:boolean }) {
+function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, historical=false,roundId,historyFile }: { roundId:number;historyFile?:string;players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string; historical?:boolean }) {
   const [mode, setMode] = useState<"team" | "player">("team");
   const [competition, setCompetition] = useState("10");
   const [position, setPosition] = useState("ATT");
@@ -167,6 +169,22 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
   const [pinned, setPinned] = useState<string | null>(null);
   const [xKey, setXKey] = useState(historical?"goalsPerGame":"xgPerGame");
   const [yKey, setYKey] = useState(historical?"goalsAgainstPerGame":"xgaPerGame");
+  const [period,setPeriod]=useState('ALL');
+  const [history,setHistory]=useState<ChartHistory|null>(null);
+  const [historyError,setHistoryError]=useState('');
+  const [historyRetry,setHistoryRetry]=useState(0);
+  useEffect(()=>{
+    if(period==='ALL'||history)return;
+    let cancelled=false;setHistoryError('');
+    if(!historyFile){setHistoryError('近期比赛数据尚未生成');return;}
+    loadChartHistory(historyFile).then(value=>{if(!cancelled)setHistory(value);}).catch(error=>{if(!cancelled)setHistoryError(error.message);});
+    return ()=>{cancelled=true;};
+  },[period,history,historyFile,historyRetry]);
+  const periodLabel=period==='ALL'?'全部':`最近 ${period} 场`;
+  const shortPeriod=period!=='ALL';
+  const windowStats=useMemo(()=>shortPeriod?(history?recentChartStats(history,roundId,Number(period),players,teams):{players:[],teams:[]}):{players,teams},[shortPeriod,period,history,roundId,players,teams]);
+  const eligiblePlayers=useMemo(()=>new Set(players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum).map(p=>p.id)),[players,minimum]);
+
   const metrics = mode === "team" ? [
     {key:"xgPerGame",label:"预期进球 · xG / 场",group:"预期表现"},
     {key:"xgaPerGame",label:"预期失球 · xGA / 场",group:"预期表现"},
@@ -184,9 +202,9 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
     ...(position !== "GK" ? [{key:"xg90",label:"预期进球 / 90",group:"预期与效率"},{key:"goals90",label:"实际进球 / 90",group:"预期与效率"},{key:"goalInvolvements90",label:"进球 + 助攻 / 90",group:"预期与效率"},{key:"keyPasses90",label:"关键传球 / 90",group:"预期与效率"},{key:"shotsOnTarget90",label:"射正 / 90",group:"预期与效率"},{key:"defensiveActions90",label:"防守动作 / 90",group:"预期与效率"}] : [{key:"saveRate",label:"扑救率 · %",group:"门将效率"}]),
     {key:"ownership",label:"持有率 · %",group:"样本与热度"},{key:"appearances",label:"出场次数",group:"样本与热度"},
     ...statColumns.filter(({key})=>position === "ALL" || (position === "ATT" ? applicableStat(key, "MID") || applicableStat(key, "FWD") : applicableStat(key, position))).map(({key,label})=>({key,label:label+" / 场",group:keeperOnly.has(key)?"门将动作":"基础场均"}))];
-  const availableMetrics=historical?metrics.filter(m=>!["xgPerGame","xgaPerGame","xgdPerGame","xgShare","xptsPerGame","pointsDeltaPerGame","finishingDeltaPerGame","xg90","ownership"].includes(m.key)):metrics;
-  const activeXKey = availableMetrics.some(m=>m.key===xKey) ? xKey : "points";
-  const activeYKey = availableMetrics.some(m=>m.key===yKey) ? yKey : "minutesPlayed";
+  const availableMetrics=historical||shortPeriod?metrics.filter(m=>!["xgPerGame","xgaPerGame","xgdPerGame","xgShare","xptsPerGame","pointsDeltaPerGame","finishingDeltaPerGame","xg90","ownership"].includes(m.key)):metrics;
+  const activeXKey = availableMetrics.some(m=>m.key===xKey) ? xKey : mode==="team"?"goalsPerGame":"points";
+  const activeYKey = availableMetrics.some(m=>m.key===yKey) ? yKey : mode==="team"?"goalsAgainstPerGame":"goals90";
   const xLabel = availableMetrics.find(m=>m.key===activeXKey)?.label ?? activeXKey;
   const yLabel = availableMetrics.find(m=>m.key===activeYKey)?.label ?? activeYKey;
   const lowerBetter = (key: string) => ["xgaPerGame","goalsAgainstPerGame","goalsConceded","yellowCards","redCards","ownGoals","penaltyMisses"].includes(key);
@@ -201,7 +219,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
     const value = "perGame" in row && key in row.perGame ? row.perGame[key as StatKey] : (row as unknown as Record<string, unknown>)[key];
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   };
-  const candidates = mode === "team" ? teams.filter(t=>includesLeague(competition,t.competitionId)) : players.filter(p=>p.perGame.minutesPlayed*p.appearances>=minimum && includesLeague(competition,p.competitionId) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
+  const candidates = mode === "team" ? windowStats.teams.filter(t=>includesLeague(competition,t.competitionId)) : windowStats.players.filter(p=>eligiblePlayers.has(p.id) && includesLeague(competition,p.competitionId) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
   const dots: AnalyticsDatum[] = candidates.flatMap(row=>{
     const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
     return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
@@ -239,7 +257,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
   const tooltipY = selected ? Math.min(bottom - 140, Math.max(top, y(selected.y) - 148)) : 0;
   const statzCompetition = competition === "11" ? "league-one" : competition === "12" ? "league-two" : "championship";
   const statzUrl = `https://statz.ai/competitions/${statzCompetition}/xg${mode === "player" ? "/players" : ""}`;
-  const changeMode = (value: "team" | "player") => { setMode(value); setXKey(value === "team" ? (historical?"goalsPerGame":"xgPerGame") : (historical?"goals90":"xg90")); setYKey(value === "team" ? (historical?"goalsAgainstPerGame":"xgaPerGame") : "goals90"); setHovered(null); };
+  const changeMode = (value: "team" | "player") => { setMode(value);setPinned(null); setXKey(value === "team" ? (historical?"goalsPerGame":"xgPerGame") : (historical?"goals90":"xg90")); setYKey(value === "team" ? (historical?"goalsAgainstPerGame":"xgaPerGame") : "goals90"); setHovered(null); };
   return <section className="panel opportunity-panel" id="chart">
     <div className="analytics-layout">
       <aside className="analytics-sidebar">
@@ -250,23 +268,26 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
         </div>
         {(["横轴","纵轴"] as const).map((label,index)=><label className="analytics-metric" key={label}><span>{label}</span><FilterSelect aria-label={label+"数据"} value={index===0?activeXKey:activeYKey} onValueChange={value=>{(index===0?setXKey:setYKey)(value);setHovered(null);}}>{availableMetrics.map(m=><option key={m.key} value={m.key} data-group={m.group}>{m.label}</option>)}</FilterSelect></label>)}
         <div className="chart-controls">
+          <label>比赛范围<FilterSelect aria-label="图表比赛范围" value={period} onValueChange={value=>{setPeriod(value);setHovered(null);setPinned(null);}}><option value="1">最近 1 场</option><option value="3">最近 3 场</option><option value="7">最近 7 场</option><option value="ALL">全部</option></FilterSelect></label>
           <label>联赛级别<FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setHovered(null); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
-          {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={90}>90 分钟</option><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
+          {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>累计至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={90}>90 分钟</option><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
-        <div className="analytics-count">{dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
+        <div className="analytics-count">{periodLabel} · {dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
+        {shortPeriod&&<p className="chart-window-note">按每支球队最近比赛 / 每名球员最近实际出场统计，少于所选场数按实际样本计算；双赛逐场计数。累计分钟门槛仍按所选 GW 的累计样本。短期 xG 等指标无逐场来源，暂不提供。</p>}
         <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{xgUpdatedAt?formatUpdated(xgUpdatedAt):"历史无存档"}<br />每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。</p>
         <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
-        <div className="analytics-visual-heading"><strong>{xLabel+" × "+yLabel}</strong><div className="chart-heading-actions"><span>{comparison?"虚线：实际进球 = xG":"虚线：当前样本均值"}</span><button className="chart-export" type="button" disabled={exporting || !dots.length} onClick={async () => {
+        <div className="analytics-visual-heading"><strong>{xLabel+" × "+yLabel}<small className="chart-period-label">{periodLabel}</small></strong><div className="chart-heading-actions"><span>{comparison?"虚线：实际进球 = xG":"虚线：当前样本均值"}</span><button className="chart-export" type="button" disabled={exporting || !dots.length} onClick={async () => {
           if (!svgRef.current) return;
           setExporting(true); setExportStatus("正在生成图片…");
           try {
-            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + leagueLabel(competition) + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + ".png" });
+            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + periodLabel + " · " + leagueLabel(competition) + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + "-" + period + ".png" });
             setExportStatus(fallbackCount ? "图片已导出，部分球衣无法加载，已以文字标记替代。" : "图片已导出");
           } catch { setExportStatus("导出失败，请重试。"); }
           finally { setExporting(false); }
         }}><Download size={15} />{exporting ? "导出中…" : "导出图片"}</button></div></div>
+        {shortPeriod&&!history&&<p className="chart-export-status" role={historyError?"alert":"status"}>{historyError||"正在加载近期比赛数据…"}{historyError&&<button type="button" className="double-filter" onClick={()=>setHistoryRetry(n=>n+1)}>重试</button>}</p>}
         {exportStatus && <p className="chart-export-status" role="status">{exportStatus}</p>}
         {candidates.length > dots.length && <details className="chart-missing"><summary>{candidates.length-dots.length} 个对象缺少所选指标，查看名单</summary><p>{candidates.filter(row=>valueFor(row,activeXKey)==null || valueFor(row,activeYKey)==null).map(row=>("perGame" in row ? row.fullName : row.name)).join("、")}</p></details>}
         <div className="chart-svg-wrap"><svg ref={svgRef} className="opportunity-svg" viewBox="0 0 820 820" role="img" aria-label={xLabel+" 与 "+yLabel+" 散点图"}>
@@ -385,7 +406,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </section>
 
         <p className="gw-stats-note">{active.statsLabel ?? data.statsLabel}</p>
-        <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
+        <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} roundId={active.meta.roundId} historyFile={data.chartHistoryFile} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
 
         <StatsTable key={"stats-"+active.meta.roundId} players={playerStats} roundId={active.meta.roundId} />
         <TeamStatsTable key={"teams-"+active.meta.roundId} teams={teamStats} />

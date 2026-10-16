@@ -37,6 +37,7 @@ jobs:
       - run: node scripts/test-round-selection.mjs
       - run: npm run build
       - run: node scripts/test-chart-data.mjs
+      - run: node scripts/test-chart-history.mjs
       - run: node scripts/test-dashboard-features.mjs
       - run: node scripts/test-personal-data.mjs
       - run: node scripts/test-round-views.mjs
