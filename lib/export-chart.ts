@@ -20,6 +20,9 @@ export async function exportChartPng(svg: SVGSVGElement, options: ExportOptions)
     properties.forEach(property => target.style.setProperty(property, computed.getPropertyValue(property)));
   });
   copy.querySelectorAll(".chart-tooltip").forEach(node => node.remove());
+  // Export uses the full SVG canvas, so mobile screen compensation would crop the axis title.
+  copy.querySelectorAll<SVGElement>(".chart-tick").forEach(node => node.style.setProperty("font-size", "14px"));
+  copy.querySelectorAll<SVGElement>(".chart-axis-label").forEach(node => node.style.setProperty("font-size", "16px"));
   copy.querySelectorAll(".chart-jersey-dot").forEach(node => node.classList.remove("chart-dot-active"));
   const images = Array.from(copy.querySelectorAll("image"));
   const urls = [...new Set(images.map(image => image.getAttribute("href") ?? "").filter(Boolean))];
