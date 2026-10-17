@@ -35,6 +35,7 @@ jobs:
           key: ${{ runner.os }}-advanced-player-v2-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-advanced-player-v2-
       - run: node scripts/test-round-selection.mjs
+      - run: node league-standings/verify.mjs
       - run: npm run build
       - run: node scripts/test-chart-data.mjs
       - run: node scripts/test-chart-history.mjs

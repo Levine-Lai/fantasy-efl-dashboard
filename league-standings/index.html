@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EFL Grand Prix · 积分榜</title><link rel="stylesheet" href="f1.css"></head>
+<body><header><span class="brand">EFL <b>GRAND PRIX</b></span><span>2026 / 27</span></header>
+<main><section class="intro"><h1 id="display-title">DRIVER STANDINGS</h1></section>
+<section class="board" aria-label="联赛积分榜"><div class="toolbar"><div class="segmented" aria-label="积分榜类型"><button id="drivers" aria-pressed="true">车手</button><button id="teams" aria-pressed="false">车队</button></div><div class="controls"><label class="week-select"><span class="sr-only">比赛周</span><select id="week"></select></label><button id="prev" aria-label="上一周">←</button><button id="next" aria-label="下一周">→</button></div></div>
+<div class="search-toolbar"><label for="search" id="search-label" class="sr-only">筛选车手</label><input id="search" type="search" placeholder="搜索车手 / 车队"></div>
+<div id="results" aria-live="polite"></div><div class="board-bottom"><span id="export-status" role="status"></span><button id="export">导出海报</button></div></section>
+<details class="rules"><summary>计分规则</summary><p>车手：每周按联赛裁定后的名次，前十名依次获得 25、18、15、12、10、8、6、4、2、1</p><p>最快圈：比较全联赛所有已选球员的实际得分，包含 C、V 代任队长及 Max Captain 的双倍加成。实际达到全联赛最高分且联赛裁定后排名前十的玩家有资格；候选多人时，比较所选 V 球员的原始 GW 分数，最高者额外加 1 分。V 也同分时暂按当周联赛裁定后的名次靠前者胜出。</p><p>车队：两位车手当周排名积分与最快圈奖励相加。</p></details>
+</main><footer><b>EFL GRAND PRIX</b><span>GW 01—09</span></footer><script src="data.js"></script><script src="rules.js"></script><script src="fastest.js"></script><script src="poster.js"></script><script src="app.js"></script></body></html>
+
+
