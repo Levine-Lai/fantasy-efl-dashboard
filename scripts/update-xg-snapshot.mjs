@@ -1,3 +1,4 @@
+import {statzRequest} from "./statz-request.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const outputUrl = new URL("../data/xg-snapshot.json", import.meta.url);
@@ -9,7 +10,7 @@ const divisions = [[10, "championship"], [11, "league-one"], [12, "league-two"]]
 try {
   const results = await Promise.all(divisions.map(async ([competitionId, slug]) => {
     const fetchPage = async (path) => {
-    const response = await fetch(`https://statz.ai/competitions/${slug}/xg${path}`, {
+    const response = await statzRequest(`https://statz.ai/competitions/${slug}/xg${path}`, {
       headers: { "user-agent": "Mozilla/5.0 (compatible; Fantasy-EFL-Data-Board/1.0)", accept: "text/html" },
       signal: AbortSignal.timeout(15000),
     });
