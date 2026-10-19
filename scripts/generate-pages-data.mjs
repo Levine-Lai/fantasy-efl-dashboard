@@ -47,8 +47,9 @@ const matched=alignAdvanced(data.playerStats,officialSquads,advanced);
 const fotmob=JSON.parse(await readFile(new URL("../data/fotmob-attacking.json",import.meta.url),"utf8"));
 attachAttacking(data,officialSquads,fotmob,advanced);
 data.setPieces=await buildSetPieces(officialSquads,advanced);
+const statzAccess=await readFile(new URL('../data/statz-access.json',import.meta.url),'utf8').then(JSON.parse).catch(()=>({}));
 data.sourceHealth={generatedAt:new Date().toISOString(),advancedMatched:matched,playerCount:data.playerStats.length,sources:[
-{name:'Fantasy EFL',capturedAt:data.meta.updatedAt},{name:'Statz xG',capturedAt:snapshot.capturedAt},{name:'Statz 动作',capturedAt:advanced.capturedAt},{name:'FotMob',capturedAt:fotmob.capturedAt}]};
+{name:'Fantasy EFL',capturedAt:data.meta.updatedAt},{name:'Statz xG',capturedAt:snapshot.capturedAt,access:statzAccess.xg?.status},{name:'Statz 动作',capturedAt:advanced.capturedAt,access:statzAccess.advanced?.status},{name:'FotMob',capturedAt:fotmob.capturedAt}]};
 console.log(`Advanced source matched safely: ${matched}/${data.playerStats.length}`);
 const calendar=fixtureCalendar(inputs,snapshot);
 const scoringSource=await readFile(new URL('../lib/fixture-difficulty.ts',import.meta.url),'utf8');

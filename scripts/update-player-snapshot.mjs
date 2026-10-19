@@ -6,7 +6,7 @@ const start = now.getUTCFullYear() - (now.getUTCMonth() < 6 ? 1 : 0);
 const season = `${start}/${start + 1}`;
 try {
   const results = await Promise.all([[10,'championship'],[11,'league-one'],[12,'league-two']].map(async ([competitionId,slug]) => {
-    const response = await statzRequest(`https://statz.ai/competitions/${slug}/stats/players?group=attacking`, {signal:AbortSignal.timeout(20000)});
+    const response = await statzRequest(`https://statz.ai/competitions/${slug}/stats/players?group=attacking`, {timeoutMs:20000}, 'advanced');
     if (!response.ok) throw new Error(`${slug}: ${response.status}`);
     const html = await response.text();
     const encoded = html.match(/data-page="([^"]+)"/)?.[1];

@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {createStatzClient} from './statz-request.mjs';
+let calls=0;const reports=[];
+const request=createStatzClient({fetchImpl:async()=>{calls++;return new Response('<title>Just a moment...</title>',{status:403,headers:{'cf-mitigated':'challenge','cf-ray':'example'}});},record:async(source,result)=>reports.push({source,...result})});
+const results=await Promise.allSettled([request('https://statz.ai/competitions/championship/xg'),request('https://statz.ai/competitions/league-one/xg')]);
+assert.ok(results.every(r=>r.status==='rejected'));
+assert.equal(calls,1,'Stop the batch after a challenge; never retry verification');
+assert.equal(reports[0].status,'cloudflare_challenge');assert.equal(reports[0].httpStatus,403);
+let success;
+const good=createStatzClient({fetchImpl:async()=>new Response('public data'),record:async(s,r)=>{success={source:s,...r};}});
+assert.equal(await (await good('https://statz.ai/competitions/championship/xg',{},'advanced')).text(),'public data');
+assert.deepEqual(success,{source:'advanced',status:'ok'});
+let denied;
+const forbidden=createStatzClient({fetchImpl:async()=>new Response('Forbidden',{status:403}),record:async(s,r)=>{denied=r;}});
+await assert.rejects(forbidden('https://statz.ai/competitions/championship/xg'));
+assert.equal(denied.status,'http_error','Do not label every HTTP 403 a Cloudflare challenge');
+console.log('Statz access checks passed: challenge classification, stop-on-denial, source status and ordinary HTTP errors');
+
+let network;
+const offline=createStatzClient({fetchImpl:async()=>{throw new Error('offline');},record:async(s,r)=>{network=r;}});
+await assert.rejects(offline('https://statz.ai/competitions/championship/xg'));
+assert.equal(network.status,'network_error');
+let rateCalls=0;
+const limited=createStatzClient({fetchImpl:async()=>{rateCalls++;return new Response('Rate limited',{status:429});},record:async()=>{}});
+await Promise.allSettled([limited('https://statz.ai/competitions/championship/xg'),limited('https://statz.ai/competitions/league-one/xg')]);
+assert.equal(rateCalls,1);

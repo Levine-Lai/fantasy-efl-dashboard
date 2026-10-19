@@ -39,6 +39,7 @@ jobs:
           path: data/xg-snapshot.json
           key: ${{ runner.os }}-xg-v1-${{ hashFiles('data/xg-snapshot.json') }}-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-xg-v1-${{ hashFiles('data/xg-snapshot.json') }}-
+      - run: node scripts/test-statz-request.mjs
       - run: node scripts/test-round-selection.mjs
       - run: node league-standings/verify.mjs
       - run: npm run build

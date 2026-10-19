@@ -12,7 +12,7 @@ try {
     const fetchPage = async (path) => {
     const response = await statzRequest(`https://statz.ai/competitions/${slug}/xg${path}`, {
       headers: { "user-agent": "Mozilla/5.0 (compatible; Fantasy-EFL-Data-Board/1.0)", accept: "text/html" },
-      signal: AbortSignal.timeout(15000),
+      timeoutMs: 15000,
     });
     if (!response.ok) throw new Error(`${slug}: HTTP ${response.status}`);
     const html = await response.text();

@@ -415,7 +415,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </section>
 
         <p className="gw-stats-note">{active.statsLabel ?? data.statsLabel}</p>
-        {data.sourceHealth&&<div className="gw-stats-note" role="status">最近构建：{formatUpdated(data.sourceHealth.generatedAt)} · {data.sourceHealth.sources.map(s=>`${s.name} ${formatUpdated(s.capturedAt)}${Date.parse(data.sourceHealth!.generatedAt)-Date.parse(s.capturedAt)>36*3600000?'（沿用旧快照）':''}`).join(' · ')}<br/>动作数据严格匹配：{data.sourceHealth.advancedMatched}/{data.sourceHealth.playerCount} 人；未对齐的指标保留缺失，其他来源独立更新。</div>}
+        {data.sourceHealth&&<div className="gw-stats-note" role="status">最近构建：{formatUpdated(data.sourceHealth.generatedAt)} · {data.sourceHealth.sources.map(s=>`${s.name} ${formatUpdated(s.capturedAt)}${s.access==='cloudflare_challenge'?'（源站验证拦截，沿用快照）':s.access&&s.access!=='ok'?'（抓取受阻，沿用快照）':Date.parse(data.sourceHealth!.generatedAt)-Date.parse(s.capturedAt)>36*3600000?'（沿用旧快照）':''}`).join(' · ')}<br/>动作数据严格匹配：{data.sourceHealth.advancedMatched}/{data.sourceHealth.playerCount} 人；未对齐的指标保留缺失，其他来源独立更新。</div>}
         <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} roundId={active.meta.roundId} historyFile={data.chartHistoryFile} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
 
         <StatsTable key={"stats-"+active.meta.roundId} players={playerStats} roundId={active.meta.roundId} />
