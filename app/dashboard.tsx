@@ -283,7 +283,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
         </div>
         <div className="analytics-count">{periodLabel} · {dots.length} {mode === "team" ? "支球队" : "名球员"} · 缺失 {candidates.length-dots.length}</div>
         {shortPeriod&&<p className="chart-window-note">按每支球队最近比赛 / 每名球员最近实际出场统计，少于所选场数按实际样本计算；双赛逐场计数。累计分钟门槛仍按所选 GW 的累计样本。短期 xG、xA、xGI、射门、传中与成功过人无逐场来源，暂不提供。</p>}
-        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{xgUpdatedAt?formatUpdated(xgUpdatedAt):"历史无存档"}<br />{!historical&&players.find(p=>p.attacking)&&<>FotMob 抓取：{formatUpdated(players.find(p=>p.attacking)!.attacking!.updatedAt)}<br/>动作数据抓取：{formatUpdated(players.find(p=>p.attacking)!.attacking!.actionUpdatedAt)}<br/></>}每日北京时间 08:17 尝试更新，以源站发布为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。新增 xG/xA/xGI 来自 FotMob，xGI 同源相加；射门、传中、成功过人来自 Statz，均按各自来源场数和分钟计算。</p>
+        <p className="chart-note">数据：<a href={statzUrl} target="_blank" rel="noreferrer">Statz xG</a> / <a href="https://fantasy.efl.com" target="_blank" rel="noreferrer">Fantasy EFL</a><br />官方抓取：{formatUpdated(officialUpdatedAt)}<br />xG 抓取：{xgUpdatedAt?formatUpdated(xgUpdatedAt):"历史无存档"}<br />{!historical&&players.find(p=>p.attacking)&&<>FotMob 抓取：{formatUpdated(players.find(p=>p.attacking)!.attacking!.updatedAt)}<br/>动作数据抓取：{formatUpdated(players.find(p=>p.attacking)!.attacking!.actionUpdatedAt)}<br/></>}每日北京时间 08:17 触发更新，GitHub 调度可能延迟；各来源以抓取时间为准。官方统计仅含确认完赛；xG 为源站赛季累计。<br />场均按出场计算；每 90 按官方比赛分钟计算（xG 除外）。缺失不计作零；失球等指标自动反向。新增 xG/xA/xGI 来自 FotMob，xGI 同源相加；射门、传中、成功过人来自 Statz，均按各自来源场数和分钟计算。</p>
         <details className="metric-methodology"><summary>进阶指标怎么看</summary><p>xGD = xG − xGA；xG 占比 = xG ÷ (xG + xGA)。xPts 来自 Statz 的逐场泊松模型。球队预期与偏差指标均使用 Statz 同一批比赛。</p><p>每 90 指标控制出场时间，但仍受战术与对手影响。防守动作 = 解围 + 封堵 + 抢断 + 拦截；扑救率 = 扑救 ÷ (扑救 + 失球)，不等于预期扑救表现。超预期指标描述结果偏差，不代表稳定能力。建议使用至少 900 分钟样本。</p></details>
       </aside>
       <div className="analytics-visual">
@@ -415,6 +415,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </section>
 
         <p className="gw-stats-note">{active.statsLabel ?? data.statsLabel}</p>
+        {data.sourceHealth&&<div className="gw-stats-note" role="status">最近构建：{formatUpdated(data.sourceHealth.generatedAt)} · {data.sourceHealth.sources.map(s=>`${s.name} ${formatUpdated(s.capturedAt)}${Date.parse(data.sourceHealth!.generatedAt)-Date.parse(s.capturedAt)>36*3600000?'（沿用旧快照）':''}`).join(' · ')}<br/>动作数据严格匹配：{data.sourceHealth.advancedMatched}/{data.sourceHealth.playerCount} 人；未对齐的指标保留缺失，其他来源独立更新。</div>}
         <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} roundId={active.meta.roundId} historyFile={data.chartHistoryFile} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
 
         <StatsTable key={"stats-"+active.meta.roundId} players={playerStats} roundId={active.meta.roundId} />

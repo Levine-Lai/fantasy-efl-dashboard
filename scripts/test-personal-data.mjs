@@ -23,7 +23,18 @@ assert.ok(projectTeamMatch({...base,own:{...base.own,xg_per_game:2}}).score>scor
 assert.ok(projectTeamMatch({...base,own:{...base.own,xga_per_game:.8}}).score>score);
 assert.ok(Number.isFinite(projectTeamMatch({home:false,wins:0,games:0}).score));
 const data=JSON.parse(await readFile(new URL('../pages/dashboard.json',import.meta.url),'utf8'));
-assert.ok(data.playerStats.filter(p=>p.advanced).length>1000);
+const advanced=JSON.parse(await readFile(new URL('../data/player-advanced.json',import.meta.url),'utf8'));
+assert.ok(advanced.players.length>1000,'Source snapshot must remain complete');
+assert.equal(data.sourceHealth.advancedMatched,data.playerStats.filter(p=>p.advanced).length);
+const {alignAdvanced}=await import('./align-advanced.mjs');
+const squads=[{competitionId:10,name:'Example FC',shortName:'Example'}];
+const sample=[{competitionId:10,team:'Example',fullName:'Jack Example',appearances:11},{competitionId:10,team:'Example',fullName:'Sam Example',appearances:10}];
+const stale={capturedAt:'2026-10-16T00:00:00Z',players:[{competitionId:10,team:'Example FC',name:'Jack Example',apps:10,mins:900,tkl:2},{competitionId:10,team:'Example FC',name:'Sam Example',apps:10,mins:900,tkl:1}]};
+assert.equal(alignAdvanced(sample,squads,stale),1,'A partially stale optional source must not block official updates');
+assert.equal(sample[0].advanced,undefined,'Reject mismatched appearances');
+assert.equal(sample[1].advanced.tkl,1);
+assert.equal(alignAdvanced([{...sample[0]}],squads,{...stale,players:[]}),0);
+assert.ok(data.sourceHealth.sources.every(s=>Number.isFinite(Date.parse(s.capturedAt))));
 for(const p of data.playerStats) {
  assert.ok(p.teamLogo);
  if(p.advanced)assert.equal(p.appearances,p.advanced.apps);

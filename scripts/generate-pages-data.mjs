@@ -1,3 +1,4 @@
+import {alignAdvanced} from "./align-advanced.mjs";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -42,22 +43,12 @@ for(const round of rounds) {
 const next=views.find(v=>v.meta.roundId===(current.id===primary.id?upcoming?.id:primary.id));
 if(next)data.upcomingRound=next;
 const advanced = JSON.parse(await readFile(new URL('../data/player-advanced.json', import.meta.url),'utf8'));
-const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
-const fullTeams = new Map(officialSquads.map(t=>[`${t.competitionId}:${normalize(t.shortName || t.name)}`,normalize(t.name)]));
-const alias = name => {const parts=name.trim().split(/\s+/);return parts.length>1?normalize(parts[0][0]+parts.slice(1).join('')):'';};
-let matched=0;
-for (const player of data.playerStats) {
-  const team = fullTeams.get(`${player.competitionId}:${normalize(player.team)}`);
-  const candidates = advanced.players.filter(row=>row.competitionId===player.competitionId && normalize(row.team)===team);
-  const exact = candidates.filter(row=>normalize(row.name)===normalize(player.fullName));
-  const abbreviated = candidates.filter(row=>alias(row.name)===alias(player.fullName));
-  const officialUnique = data.playerStats.filter(row=>row.competitionId===player.competitionId && row.team===player.team && alias(row.fullName)===alias(player.fullName)).length===1;
-  const row = exact.length===1 ? exact[0] : !exact.length && officialUnique && abbreviated.length===1 ? abbreviated[0] : null;
-  if(row && row.apps===player.appearances && row.mins>0) { const {name,team,competitionId,...metrics}=row; player.advanced={...metrics,updatedAt:advanced.capturedAt}; matched++; }
-}
+const matched=alignAdvanced(data.playerStats,officialSquads,advanced);
 const fotmob=JSON.parse(await readFile(new URL("../data/fotmob-attacking.json",import.meta.url),"utf8"));
 attachAttacking(data,officialSquads,fotmob,advanced);
 data.setPieces=await buildSetPieces(officialSquads,advanced);
+data.sourceHealth={generatedAt:new Date().toISOString(),advancedMatched:matched,playerCount:data.playerStats.length,sources:[
+{name:'Fantasy EFL',capturedAt:data.meta.updatedAt},{name:'Statz xG',capturedAt:snapshot.capturedAt},{name:'Statz 动作',capturedAt:advanced.capturedAt},{name:'FotMob',capturedAt:fotmob.capturedAt}]};
 console.log(`Advanced source matched safely: ${matched}/${data.playerStats.length}`);
 const calendar=fixtureCalendar(inputs,snapshot);
 const scoringSource=await readFile(new URL('../lib/fixture-difficulty.ts',import.meta.url),'utf8');

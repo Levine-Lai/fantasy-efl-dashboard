@@ -76,7 +76,7 @@ export type RoundRecommendations = { meta: DashboardMeta; picks: Record<Position
 export type RoundFixture = { id:number; date:string; status:string; finalized:boolean; competitionId:number; homeId:number; awayId:number; homeName:string; awayName:string; homeLogo:string; awayLogo:string; homeScore:number|null; awayScore:number|null };
 export type RoundIndex = { id:number; name:string; lockoutAt:string; state:"completed"|"current"|"future"; file:string; fixtureCount:number; doubleTeams:number };
 export type RoundView = RoundRecommendations & { fixtures:RoundFixture[]; playerStats?:PlayerStat[]; teamStats?:TeamStat[]; statsLabel:string };
-export type DashboardData = RoundRecommendations & { playerStats: PlayerStat[]; teamStats: TeamStat[]; news: NewsItem[]; upcomingRound?: RoundRecommendations; roundIndex?:RoundIndex[]; fixtures?:RoundFixture[]; statsLabel?:string; fixtureMatrixFile?:string; chartHistoryFile?:string;setPieces?:SetPieces };
+export type DashboardData = RoundRecommendations & { sourceHealth?: {generatedAt:string;advancedMatched:number;playerCount:number;sources:{name:string;capturedAt:string}[]}; playerStats: PlayerStat[]; teamStats: TeamStat[]; news: NewsItem[]; upcomingRound?: RoundRecommendations; roundIndex?:RoundIndex[]; fixtures?:RoundFixture[]; statsLabel?:string; fixtureMatrixFile?:string; chartHistoryFile?:string;setPieces?:SetPieces };
 type DashboardInputs = { players:RawPlayer[]; squads:RawSquad[]; rounds:RawRound[]; lives:Map<number,LiveRound> };
 
 export function selectRecommendationRounds(rounds: RawRound[], now = Date.now()) {
