@@ -5,7 +5,7 @@ export const normalize=name=>{
   joshuabrendandavidmagennis:'joshmagennis',onellazarohernandezmayea:'onelhernandez',emmanuelmonthe:'mannymonthe',
   benbreretondiaz:'benbrereton',cameronmcjannett:'cameronmcjannet',tatycastellanos:'valentincastellanos',fabioandretavaresdesiderio:'fabiotavares',
   emilriisjakobsen:'emilriis',olutobiadebayorowling:'tobiadebayorowling',
-  jordangabriel:'jordanlawrencegabriel',lutherwildin:'lutherjameswildin',mikefondoptalum:'mikefondop',chrisforinojoseph:'chrisforino'
+  jordangabriel:'jordanlawrencegabriel',lutherwildin:'lutherjameswildin',mikefondoptalum:'mikefondop',chrisforinojoseph:'chrisforino',toti:'totigomes'
  })[key]??key;
 };
 const alias=name=>{const parts=name.trim().split(/\s+/);return parts.length>1?normalize(parts[0][0]+parts.slice(1).join('')):'';};

@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-10-22T14:46:24.245Z",
-  "eflCapturedAt": "2026-10-22T14:45:27.347Z",
+  "generatedAt": "2026-10-22T14:54:15.777Z",
+  "eflCapturedAt": "2026-10-22T14:53:26.119Z",
   "sourceHealth": {
-    "generatedAt": "2026-10-22T14:45:43.881Z",
-    "advancedMatched": 1659,
+    "generatedAt": "2026-10-22T14:53:43.127Z",
+    "advancedMatched": 1660,
     "playerCount": 1684,
     "sources": [
       {
         "name": "Fantasy EFL",
-        "capturedAt": "2026-10-22T14:45:27.347Z"
+        "capturedAt": "2026-10-22T14:53:26.119Z"
       },
       {
         "name": "Statz xG",
@@ -17,12 +17,12 @@
       },
       {
         "name": "Statz 动作",
-        "capturedAt": "2026-10-22T14:45:11.620Z",
+        "capturedAt": "2026-10-22T14:53:12.178Z",
         "access": "ok"
       },
       {
         "name": "FotMob",
-        "capturedAt": "2026-10-22T14:45:16.847Z"
+        "capturedAt": "2026-10-22T14:53:19.661Z"
       }
     ]
   },
@@ -30,17 +30,16 @@
     {
       "metric": "xg",
       "total": 1684,
-      "available": 1659,
-      "missing": 25,
+      "available": 1660,
+      "missing": 24,
       "reasons": {
-        "identity_unmatched": 23,
+        "identity_unmatched": 22,
         "appearance_mismatch": 2
       },
       "over450": {
         "total": 831,
-        "missing": 2,
+        "missing": 1,
         "reasons": {
-          "identity_unmatched": 1,
           "appearance_mismatch": 1
         }
       },
@@ -184,18 +183,6 @@
           "league": "英冠",
           "position": "FWD",
           "minutes": 333,
-          "officialApps": 8,
-          "sourceApps": null,
-          "sourceName": null,
-          "reason": "identity_unmatched"
-        },
-        {
-          "id": 510362,
-          "name": "Toti Gomes",
-          "team": "Wolves",
-          "league": "英冠",
-          "position": "DEF",
-          "minutes": 650,
           "officialApps": 8,
           "sourceApps": null,
           "sourceName": null,
@@ -350,17 +337,16 @@
     {
       "metric": "advanced",
       "total": 1684,
-      "available": 1659,
-      "missing": 25,
+      "available": 1660,
+      "missing": 24,
       "reasons": {
-        "identity_unmatched": 23,
+        "identity_unmatched": 22,
         "appearance_mismatch": 2
       },
       "over450": {
         "total": 831,
-        "missing": 2,
+        "missing": 1,
         "reasons": {
-          "identity_unmatched": 1,
           "appearance_mismatch": 1
         }
       },
@@ -504,18 +490,6 @@
           "league": "英冠",
           "position": "FWD",
           "minutes": 333,
-          "officialApps": 8,
-          "sourceApps": null,
-          "sourceName": null,
-          "reason": "identity_unmatched"
-        },
-        {
-          "id": 510362,
-          "name": "Toti Gomes",
-          "team": "Wolves",
-          "league": "英冠",
-          "position": "DEF",
-          "minutes": 650,
           "officialApps": 8,
           "sourceApps": null,
           "sourceName": null,

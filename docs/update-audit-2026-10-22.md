@@ -14,11 +14,11 @@ FPL 首页 `fpl.html`、个人页 `fpl-personal.html`、两边首页及个人页
 
 | 指标 | 首次重建可用 | 修复后可用 | 修复后缺失 |
 | --- | ---: | ---: | ---: |
-| Statz xG/90 | 1,580 | 1,659 | 25 |
-| 对齐官方出场数的 Statz 进阶画像 | 1,580 | 1,659 | 25 |
+| Statz xG/90 | 1,580 | 1,660 | 24 |
+| 对齐官方出场数的 Statz 进阶画像 | 1,580 | 1,660 | 24 |
 | FotMob xA | 1,633 | 1,656 | 28 |
 
-831 名至少 450 分钟的球员中，xG 和进阶画像均只剩 2 人缺失，FotMob xA 缺失为 0。英乙中场至少 450 分钟的 88 人，xG 图由 85 人可绘制提高到 88 人，缺失为 0。
+831 名至少 450 分钟的球员中，xG 和进阶画像均只剩 1 人缺失，FotMob xA 缺失为 0。英乙中场至少 450 分钟的 88 人，xG 图由 85 人可绘制提高到 88 人，缺失为 0。
 
 修复包括：
 
@@ -46,11 +46,11 @@ FPL 首页 `fpl.html`、个人页 `fpl-personal.html`、两边首页及个人页
 | Stanley Mills | 8 | Oxford 1 + Preston 7 |
 | George Nevett | 6 | Peterborough 1 + Tranmere 5 |
 
-仍缺失的高分钟样本只有 Joseph Opoku 和 Toti Gomes。Joseph Opoku 的官方 10 场均属于 Swansea，Statz 仅 1 场，无法通过其他球队记录补齐；可确认覆盖不一致，但无法仅凭累计页断言是漏记、滞后还是源站定义不同。未补造缺少比赛。
+仍缺失的高分钟样本只有 Joseph Opoku。其官方 10 场均属于 Swansea，Statz 仅 1 场，无法通过其他球队记录补齐；可确认覆盖不一致，但无法仅凭累计页断言是漏记、滞后还是源站定义不同。未补造缺少比赛。
 
-Toti Gomes：Statz 的同队名单没有可安全确认的对应记录。Rodrigo Gomes 是另一名球员，未以相同姓氏合并。FotMob 有 Toti 本人的独立记录，仍可用于其同源进攻指标。
+最终复核补齐 Toti Gomes：Statz 使用单名 Toti，与官方 8 场、650 分钟一致。[Wolves 官方资料](https://www.wolves.co.uk/news/mens-first-team/20220801-toti-i-m-learning-and-improving-every-day/)确认 Toti / Toti Gomes 为同一人。此前“未匹配”已修正为明确单名映射，Rodrigo Gomes 仍是独立球员，没有按相同姓氏合并。
 
-全量 xG/进阶画像缺失 25 人：2 人出场数不同、23 人身份未安全匹配。另一个出场数不同者为 Gerard Garner，官方 7 场、Statz 8 场。其余低分钟未匹配名单及逐人原因均在 JSON 中。FotMob xA 缺失 28 人：27 人未安全匹配，另 1 人 Mason Melia（18 分钟）有对应记录但源端 xA 为空，保留缺失。
+全量 xG/进阶画像缺失 24 人：2 人出场数不同、22 人身份未安全匹配。另一个出场数不同者为 Gerard Garner，官方 7 场、Statz 8 场。其余低分钟未匹配名单及逐人原因均在 JSON 中。FotMob xA 缺失 28 人：27 人未安全匹配，另 1 人 Mason Melia（18 分钟）有对应记录但源端 xA 为空，保留缺失。
 
 ## FPL 数据完整性
 

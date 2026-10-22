@@ -17,6 +17,9 @@ assert.notEqual(abbreviatedPlayerKey("Jack Fitzwater"),abbreviatedPlayerKey("Joe
 assert.equal(middlePlayerKey('Pelly Mpanzu'),middlePlayerKey('Pelly Ruddock Mpanzu'));
 assert.notEqual(middlePlayerKey('Toti Gomes'),middlePlayerKey('Rodrigo Gomes'),'Different first names never match as middle-name variants');
 assert.equal(middlePlayerKey('Max Weiß'),middlePlayerKey('Max Weiss'));
+assert.equal(matchKey('Toti'),matchKey('Toti Gomes'));
+assert.equal(normalize('Toti'),normalize('Toti Gomes'));
+assert.notEqual(matchKey('Toti'),matchKey('Rodrigo Gomes'),'Wolves players with the same surname remain distinct');
 const snapshot=JSON.parse(await readFile(new URL("../data/xg-snapshot.json",import.meta.url),"utf8"));
 const {rows:canonicalRows}=await getXgRows(snapshot.season,snapshot);
 const mk=snapshot.players.find(p=>p.team_name==='Milton Keynes Dons'&&p.minutes>0);

@@ -104,7 +104,7 @@ export function matchKey(value: string) {
     joshuabrendandavidmagennis:'joshmagennis',onellazarohernandezmayea:'onelhernandez',emmanuelmonthe:'mannymonthe',
     benbreretondiaz:'benbrereton',cameronmcjannett:'cameronmcjannet',tatycastellanos:'valentincastellanos',fabioandretavaresdesiderio:'fabiotavares',
     emilriisjakobsen:'emilriis',olutobiadebayorowling:'tobiadebayorowling',
-    jordangabriel:'jordanlawrencegabriel',lutherwildin:'lutherjameswildin',mikefondoptalum:'mikefondop',chrisforinojoseph:'chrisforino'
+    jordangabriel:'jordanlawrencegabriel',lutherwildin:'lutherjameswildin',mikefondoptalum:'mikefondop',chrisforinojoseph:'chrisforino',toti:'totigomes'
   } as Record<string, string>)[key] ?? key;
 }
 
