@@ -1,0 +1,102 @@
+/* FPL uses the EFL layout and controls; only sport-specific and kit layouts differ. */
+.fpl-app .opportunity-panel,.fpl-app .stats-panel,.fpl-app .round-fixtures,.fpl-app .fpl-news-panel { margin-top:24px; }
+.fpl-app .lead-grid { margin-top:24px; }
+.fpl-app .fpl-lineup { grid-template-rows:repeat(4,minmax(145px,auto)); gap:12px; padding:16px 8px; }
+.fpl-lineup .lineup-row { gap:6px; align-items:stretch; }
+.fpl-lineup .lineup-card { flex:0 1 110px; width:110px; height:145px; min-width:0; padding:5px 3px; border-radius:9px; }
+.fpl-lineup .lineup-avatar { width:52px; height:57px; }
+.fpl-lineup .lineup-crest { width:17px; height:17px; top:5px; right:4px; }
+.fpl-lineup .lineup-position { top:6px; left:4px; font-size:9px; }
+.fpl-lineup .lineup-card strong { font-size:11px; max-width:100%; }
+.fpl-lineup .lineup-card > strong { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; text-align:center; min-height:22px; display:flex; align-items:center; justify-content:center; line-height:1.1; }
+.fpl-lineup .lineup-card small { font-size:9px; }
+.fpl-lineup .lineup-score { font-size:8px; }
+.fpl-lineup .lineup-score b { font-size:12px; }
+.fpl-lineup .lineup-card .fixture-badges { min-height:24px; }
+.fpl-lineup .fixture-badge { gap:3px; font-size:8px; }
+.fpl-lineup .fixture-logo { width:13px; height:13px; }
+.fpl-lineup .lineup-captain { width:20px; height:20px; font-size:11px; right:-4px; bottom:28px; }
+.fpl-app .player-meta .fixture-badges { display:flex; flex-wrap:wrap; }
+.fpl-app .player-meta .fixture-badge { padding:0; font-size:10px; }
+.fpl-app .player-meta .fixture-logo { width:15px; height:15px; }
+.fpl-app .pill { color:var(--prussian); background:var(--ice); border:1px solid var(--border); }
+.fpl-kit-stack { display:inline-block; flex-shrink:0; position:relative; width:46px; height:46px; }
+.fpl-kit-stack .fpl-table-shirt { width:40px; height:44px; object-fit:contain; }
+.fpl-kit-stack .fpl-table-crest { position:absolute; right:0; bottom:0; width:19px; height:19px; object-fit:contain; background:white; padding:2px; border-radius:50%; }
+.fpl-player-identity { gap:11px; align-items:center; }
+.fpl-player-identity > span:last-child { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.fpl-player-identity strong { font-size:13px; line-height:1.3; }
+.fpl-player-identity small { font-size:10px; color:#6d8392; font-weight:400; }
+.fpl-enhanced-table td { font-variant-numeric:tabular-nums; }
+.fpl-enhanced-table tbody tr:nth-child(even) > th { background:#f7fafc; }
+.fpl-enhanced-table tbody tr:hover > th { background:var(--ice); }
+.fpl-enhanced-table tbody tr > :is(th,td) { padding-top:10px; padding-bottom:10px; }
+.fpl-enhanced-table .stats-name-col { min-width:225px; }
+.fpl-opponent-cell { display:inline-flex; align-items:center; gap:8px; }
+.fpl-personal-kit { position:relative; flex-shrink:0; width:86px; height:80px; }
+.personal-identity .fpl-personal-shirt { width:76px; height:80px; }
+.personal-identity .fpl-personal-crest { position:absolute; right:0; bottom:0; width:29px; height:29px; background:white; padding:3px; border-radius:50%; }
+.fpl-app .club-form { display:flex; gap:4px; }
+.fpl-app .club-form i { width:18px; height:18px; display:grid; place-items:center; border-radius:3px; font-size:9px; font-style:normal; }
+.fpl-app .team-pick-main .club-form { margin-top:7px; }
+.fpl-app .stats-toolbar .filter-select-trigger { min-width:110px; }
+.fpl-app .fdr-controls > .filter-select-trigger { width:115px; }
+.fpl-app .fdr-controls { flex-wrap:wrap; align-items:center; }
+.fpl-multi-fixtures { min-width:760px; }
+.fpl-multi-fixtures .fdr-team-col { width:120px; }
+.fpl-fixture-crests { display:flex; align-items:center; justify-content:space-around; gap:20px; margin:24px 0; }
+.fpl-fixture-crests img { width:65px; height:65px; }
+.fpl-news-panel { padding:24px; }
+.fpl-news-panel .news-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:20px; }
+.fpl-news-panel .section-heading > .filter-select-trigger { max-width:210px; }
+.fpl-news-panel .news-card p { font-size:13px; line-height:1.7; margin:8px 0 0; }
+.fpl-app .set-piece-player > .fpl-player-identity { display:inline-flex; }
+.fpl-app .set-piece-player { padding-block:5px; }
+.fpl-app .set-piece-player .fpl-kit-stack { width:34px; height:36px; }
+.fpl-app .set-piece-player .fpl-table-shirt { width:30px; height:34px; }
+.fpl-app .set-piece-player .fpl-table-crest { width:15px; height:15px; }
+.fpl-app .set-piece-player .fpl-player-identity small { display:none; }
+.fpl-data-method { margin:22px 0; font-size:11px; color:#55748a; line-height:1.8; }
+.fpl-data-method summary { cursor:pointer; }
+.fpl-load { max-width:650px; margin:15vh auto; padding:28px; color:var(--prussian); }
+.fpl-load button,.fpl-load a { display:inline-block; margin:20px 16px 0 0; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--white); cursor:pointer; }
+@media(max-width:900px) {
+ .fpl-app .fpl-lineup { grid-template-rows:repeat(4,minmax(145px,auto)); }
+ .fpl-news-panel .news-list { grid-template-columns:minmax(0,1fr); }
+ .fpl-enhanced-table .stats-name-col { min-width:155px; width:155px; }
+ .fpl-player-identity { gap:7px; }
+ .fpl-player-identity strong { font-size:12px; }
+ .fpl-kit-stack { width:34px; height:38px; }
+ .fpl-kit-stack .fpl-table-shirt { width:31px; height:36px; }
+ .fpl-kit-stack .fpl-table-crest { width:16px; height:16px; }
+ .fpl-app .personal-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .fpl-app .personal-filters > * { min-width:0; }
+ .fpl-app .personal-filters input { width:100%; }
+ .fpl-news-panel { padding:16px; }
+}
+@media(max-width:400px) {
+ .fpl-lineup .lineup-card { flex-basis:64px; height:145px; }
+ .fpl-lineup .lineup-row { gap:4px; }
+ .fpl-lineup .lineup-avatar { width:36px; height:50px; }
+ .fpl-lineup .lineup-card strong { font-size:9px; }
+ .fpl-lineup .lineup-card small { font-size:8px; }
+ .fpl-lineup .lineup-crest { width:13px; height:13px; }
+ .fpl-lineup .lineup-position { font-size:8px; }
+ .fpl-lineup .fixture-badge { gap:1px; font-size:7px; }
+ .fpl-lineup .fixture-logo { width:10px; height:10px; }
+ .fpl-app .personal-identity { gap:10px; flex-wrap:wrap; }
+ .fpl-app .personal-identity > div { min-width:0; }
+ .fpl-app .personal-identity h3 { overflow-wrap:anywhere; }
+}
+@media(max-width:540px) {
+ .fpl-app .fpl-lineup { grid-template-rows:repeat(4,minmax(152px,auto)); }
+ .fpl-lineup .lineup-row { flex-wrap:wrap; gap:12px; }
+ .fpl-lineup .lineup-card { flex:0 1 42%; max-width:114px; height:152px; }
+ .fpl-lineup .lineup-avatar { width:50px; height:55px; }
+ .fpl-lineup .lineup-card strong { font-size:11px; }
+ .fpl-lineup .lineup-card small { font-size:9px; }
+ .fpl-lineup .lineup-crest { width:17px; height:17px; }
+ .fpl-lineup .lineup-position { font-size:9px; }
+ .fpl-lineup .fixture-badge { font-size:8px; gap:3px; }
+ .fpl-lineup .fixture-logo { width:13px; height:13px; }
+}

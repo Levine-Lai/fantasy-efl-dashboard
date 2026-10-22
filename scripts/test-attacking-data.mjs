@@ -14,6 +14,18 @@ assert.equal(attackingValue({...player,position:'GK'},'xa'),null);
 const official=[{fullName:'John Smith',competitionId:10,team:'A'},{fullName:'James Smith',competitionId:10,team:'A'}];
 assert.equal(uniquePlayer([{name:'J. Smith',team:'A',competitionId:10}],official[0],'A',official),null,'Ambiguous abbreviation cannot match');
 assert.equal(uniquePlayer([{name:'John Smith',team:'B',competitionId:10}],official[0],'A',official),null,'Do not cross teams');
+for(const [name,fullName] of [['Géza Dávid Turi','Géza Turi'],['Matthew Max Dibley-Dias','Matt Dibley-Dias'],['Brendan Sarpong-Wiredu','Brendan Wiredu']]) {
+ const p={fullName,competitionId:12,team:'Example'},r={name,competitionId:12,team:'Example'};
+ assert.equal(uniquePlayer([r],p,'Example',[p]),r);
+ assert.equal(uniquePlayer([r,{...r}],p,'Example',[p]),null,'Duplicate canonical names remain ambiguous');
+ assert.equal(uniquePlayer([{...r,competitionId:11}],p,'Example',[p]),null,'Name variants never cross leagues');
+}
+const midPlayer={fullName:'Alex Example',competitionId:12,team:'Example'};
+const midRow={name:'Alex John Example',competitionId:12,team:'Example'};
+assert.equal(uniquePlayer([midRow],midPlayer,'Example',[midPlayer]),midRow);
+assert.equal(uniquePlayer([midRow,{...midRow,name:'Alex James Example'}],midPlayer,'Example',[midPlayer]),null);
+assert.equal(uniquePlayer([midRow],midPlayer,'Example',[midPlayer,{...midPlayer,fullName:'Alex James Example'}]),null);
+assert.equal(uniquePlayer([{...midRow,name:'Adam John Example'}],midPlayer,'Example',[midPlayer]),null);
 const data=JSON.parse(await readFile(new URL('../pages/dashboard.json',import.meta.url),'utf8'));
 const fm=data.playerStats.filter(p=>p.attacking?.xa!=null),actions=data.playerStats.filter(p=>p.attacking?.shots!=null);
 assert.ok(fm.length>1000);assert.ok(actions.length>1400);

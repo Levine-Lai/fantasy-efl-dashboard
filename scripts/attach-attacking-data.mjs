@@ -1,11 +1,23 @@
 import {readFile,writeFile} from 'node:fs/promises';
-export const normalize=name=>name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').replace('miltonkeynesdons','mkdons');
+export const normalize=name=>{
+ const key=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replaceAll('ß','ss').replaceAll('ð','d').replaceAll('ø','o').replaceAll('ł','l').replace(/[^a-z0-9]/g,'').replace('miltonkeynesdons','mkdons');
+ return ({gezadavidturi:'gezaturi',matthewmaxdibleydias:'mattdibleydias',brendansarpongwiredu:'brendanwiredu',
+  joshuabrendandavidmagennis:'joshmagennis',onellazarohernandezmayea:'onelhernandez',emmanuelmonthe:'mannymonthe',
+  benbreretondiaz:'benbrereton',cameronmcjannett:'cameronmcjannet',tatycastellanos:'valentincastellanos',fabioandretavaresdesiderio:'fabiotavares',
+  emilriisjakobsen:'emilriis',olutobiadebayorowling:'tobiadebayorowling',
+  jordangabriel:'jordanlawrencegabriel',lutherwildin:'lutherjameswildin',mikefondoptalum:'mikefondop',chrisforinojoseph:'chrisforino'
+ })[key]??key;
+};
 const alias=name=>{const parts=name.trim().split(/\s+/);return parts.length>1?normalize(parts[0][0]+parts.slice(1).join('')):'';};
+const middle=name=>{const parts=name.trim().split(/\s+/);return parts.length>1?normalize(parts[0]+' '+parts.at(-1)):'';};
 export function uniquePlayer(rows,player,team,official){
  const candidates=rows.filter(r=>r.competitionId===player.competitionId&&normalize(r.team)===normalize(team));
- const exact=candidates.filter(r=>normalize(r.name)===normalize(player.fullName));if(exact.length===1)return exact[0];if(exact.length)return null;
+ const exact=candidates.filter(r=>normalize(r.name)===normalize(player.fullName));
+ if(exact.length)return exact.length===1&&official.filter(p=>p.competitionId===player.competitionId&&p.team===player.team&&normalize(p.fullName)===normalize(player.fullName)).length===1?exact[0]:null;
  const short=alias(player.fullName),matches=candidates.filter(r=>alias(r.name)===short);
- return short&&matches.length===1&&official.filter(p=>p.competitionId===player.competitionId&&p.team===player.team&&alias(p.fullName)===short).length===1?matches[0]:null;
+ if(short&&matches.length===1&&official.filter(p=>p.competitionId===player.competitionId&&p.team===player.team&&alias(p.fullName)===short).length===1)return matches[0];
+ const key=middle(player.fullName),long=candidates.filter(r=>middle(r.name)===key);
+ return key&&long.length===1&&official.filter(p=>p.competitionId===player.competitionId&&p.team===player.team&&middle(p.fullName)===key).length===1?long[0]:null;
 }
 export function attachAttacking(data,squads,fotmob,advanced){
  let fm=0,actions=0;

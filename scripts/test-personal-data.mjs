@@ -33,6 +33,11 @@ const stale={capturedAt:'2026-10-16T00:00:00Z',players:[{competitionId:10,team:'
 assert.equal(alignAdvanced(sample,squads,stale),1,'A partially stale optional source must not block official updates');
 assert.equal(sample[0].advanced,undefined,'Reject mismatched appearances');
 assert.equal(sample[1].advanced.tkl,1);
+const variants=[{competitionId:12,team:'Grimsby',fullName:'Géza Turi',appearances:10},{competitionId:12,team:'Salford',fullName:'Brendan Wiredu',appearances:12}];
+const variantSource={capturedAt:advanced.capturedAt,players:[{competitionId:12,team:'Grimsby Town',name:'Géza Dávid Turi',apps:10,mins:900},{competitionId:12,team:'Salford City',name:'Brendan Sarpong-Wiredu',apps:11,mins:732}]};
+assert.equal(alignAdvanced(variants,[{competitionId:12,name:'Grimsby Town',shortName:'Grimsby'},{competitionId:12,name:'Salford City',shortName:'Salford'}],variantSource),1);
+assert.ok(variants[0].advanced);
+assert.equal(variants[1].advanced,undefined,'Name correction never bypasses appearance alignment');
 assert.equal(alignAdvanced([{...sample[0]}],squads,{...stale,players:[]}),0);
 assert.ok(data.sourceHealth.sources.every(s=>Number.isFinite(Date.parse(s.capturedAt))));
 for(const p of data.playerStats) {

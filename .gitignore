@@ -9,6 +9,8 @@ public/round-data/
 public/fixture-matrix/
 
 /public/chart-history/
-
 # Per-build source access diagnostics
 data/statz-access.json
+/public/fpl/
+/data/fpl/raw.json
+/data/fpl/histories-*.json

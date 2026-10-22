@@ -97,13 +97,25 @@ function unescapeHtml(value: string) {
   return value.replaceAll("&amp;", "&").replaceAll("&quot;", '"').replaceAll("&#39;", "'").replaceAll("&apos;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
 }
 
-function matchKey(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+export function matchKey(value: string) {
+  const key = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replaceAll('ß','ss').replaceAll('ð','d').replaceAll('ø','o').replaceAll('ł','l').replace(/[^a-z0-9]/g, "").replace('miltonkeynesdons','mkdons');
+  // Verified full-name variants only; league, club and appearance checks still apply.
+  return ({ gezadavidturi: 'gezaturi', matthewmaxdibleydias: 'mattdibleydias', brendansarpongwiredu: 'brendanwiredu',
+    joshuabrendandavidmagennis:'joshmagennis',onellazarohernandezmayea:'onelhernandez',emmanuelmonthe:'mannymonthe',
+    benbreretondiaz:'benbrereton',cameronmcjannett:'cameronmcjannet',tatycastellanos:'valentincastellanos',fabioandretavaresdesiderio:'fabiotavares',
+    emilriisjakobsen:'emilriis',olutobiadebayorowling:'tobiadebayorowling',
+    jordangabriel:'jordanlawrencegabriel',lutherwildin:'lutherjameswildin',mikefondoptalum:'mikefondop',chrisforinojoseph:'chrisforino'
+  } as Record<string, string>)[key] ?? key;
 }
 
 export function abbreviatedPlayerKey(name: string) {
   const parts = name.trim().split(/\s+/);
   return parts.length > 1 ? matchKey(parts[0][0] + parts.slice(1).join("")) : "";
+}
+
+export function middlePlayerKey(name: string) {
+  const parts=name.trim().split(/\s+/);
+  return parts.length>1 ? matchKey(parts[0]+' '+parts.at(-1)) : '';
 }
 
 type XgRow = { player_name: string; team_name: string; apps: number; xg: number | null; minutes: number | null };
@@ -123,12 +135,15 @@ async function getXgRows(season: string, snapshot?: XgSnapshot) {
     if (page.props.seasonLabel !== season || page.props.players.length < 100) throw new Error(`Statz ${slug}: unexpected season or incomplete player list`);
     return page.props.players.map((row) => ({ ...row, competitionId }));
   }))).flat();
-  const rows = new Map<string, { apps: number; xg: number; minutes: number }>();
+  const rows = new Map<string, { apps: number; xg: number; minutes: number } | null>();
   const aliases = new Map<string, { apps: number; xg: number; minutes: number } | null>();
+  const middleNames = new Map<string, { apps: number; xg: number; minutes: number } | null>();
   for (const row of results) {
     if (row.xg === null || row.minutes === null || row.minutes <= 0 || !Number.isFinite(row.xg)) continue;
     const key = `${row.competitionId}:${matchKey(row.team_name)}:${matchKey(row.player_name)}`;
-    if (!rows.has(key)) rows.set(key, { apps: row.apps, xg: row.xg, minutes: row.minutes });
+    rows.set(key, rows.has(key) ? null : { apps: row.apps, xg: row.xg, minutes: row.minutes });
+    const middleKey=`${row.competitionId}:${matchKey(row.team_name)}:${middlePlayerKey(row.player_name)}`;
+    middleNames.set(middleKey,middleNames.has(middleKey)?null:{apps:row.apps,xg:row.xg,minutes:row.minutes});
     const abbreviated = abbreviatedPlayerKey(row.player_name);
     if (abbreviated) {
       const alias = `${row.competitionId}:${matchKey(row.team_name)}:${abbreviated}`;
@@ -142,7 +157,7 @@ async function getXgRows(season: string, snapshot?: XgSnapshot) {
     const league = (snapshot?.teams ?? []).filter((row) => row.competitionId === competitionId && row.played > 0);
     if (league.length) leagueAverages.set(competitionId, { attack: league.reduce((sum, row) => sum + row.xg_per_game, 0) / league.length, defense: league.reduce((sum, row) => sum + row.xga_per_game, 0) / league.length });
   }
-  return { rows, aliases, teamRows, leagueAverages, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
+  return { rows, aliases, middleNames, teamRows, leagueAverages, updatedAt: snapshot && snapshot.season === season ? snapshot.capturedAt : new Date().toISOString() };
 }
 
 export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: number, inputs?:DashboardInputs): Promise<DashboardData> {
@@ -184,6 +199,7 @@ export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: 
   const teamAgg = new Map<number, { games: number; wins: number; draws: number; cleanSheets: number; goals: number; fantasyPoints:number; conceded:number }>();
   const playerAgg = new Map<number, { games: number; minutes: number; sixty: number; points: number; goals: number; assists: number; saves: number; cleanSheets: number; clearances: number; blocks: number; tackles: number; interceptions: number; keyPasses: number; shotsOnTarget: number }>();
   const playerEventTotals = new Map<number, { games: number; totals: Record<StatKey, number> }>();
+  const playerStints = new Map<number, Map<number, number>>();
   const componentsByPlayer = new Map<number, ScoreComponents>();
   const positionComponents = new Map<Position, { games: number; totals: ScoreComponents }>();
   const playerPositions = new Map(players.map((player) => [player.id, player.position]));
@@ -194,6 +210,8 @@ export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: 
       agg.games += 1; agg.wins += row.win; agg.draws += row.draw; agg.cleanSheets += row.cleanSheet; agg.goals += row.goalsScored; agg.fantasyPoints += row.points ?? 0; agg.conceded += live.squads.find(opponent=>opponent.gameId===row.gameId && opponent.squadId!==row.squadId)?.goalsScored ?? 0; teamAgg.set(row.squadId, agg);
     }
     for (const row of live.players) {
+      const stints=playerStints.get(row.playerId)??new Map<number,number>();
+      stints.set(row.squadId,(stints.get(row.squadId)??0)+1);playerStints.set(row.playerId,stints);
       const position = playerPositions.get(row.playerId);
       if (position) {
         const parts = scoreComponents(row, position);
@@ -211,6 +229,28 @@ export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: 
       const agg = playerAgg.get(row.playerId) ?? { games: 0, minutes: 0, sixty: 0, points: 0, goals: 0, assists: 0, saves: 0, cleanSheets: 0, clearances: 0, blocks: 0, tackles: 0, interceptions: 0, keyPasses: 0, shotsOnTarget: 0 };
       agg.games += 1; agg.minutes += row.minutesPlayed ?? 0; agg.sixty += (row.minutesPlayed ?? 0) >= 60 ? 1 : 0; agg.points += row.points ?? 0; agg.goals += row.goalsScored ?? 0; agg.assists += row.assists ?? 0; agg.saves += row.saves ?? 0; agg.cleanSheets += row.cleanSheet ?? 0; agg.clearances += row.clearances ?? 0; agg.blocks += row.blocks ?? 0; agg.tackles += row.tackles ?? 0; agg.interceptions += row.interceptions ?? 0; agg.keyPasses += row.keyPasses ?? 0; agg.shotsOnTarget += row.shotsOnTarget ?? 0; playerAgg.set(row.playerId, agg);
     }
+  }
+
+  const sourceForStint=(player:RawPlayer,squadId:number)=>{
+    const squad=squadsById.get(squadId);if(!squad)return undefined;
+    const name=`${player.firstName} ${player.lastName}`.trim(),prefix=`${squad.competitionId}:${matchKey(squad.name)}:`;
+    const roster=players.filter(other=>other.squadId===squadId||playerStints.get(other.id)?.has(squadId));
+    const exact=xgRows.get(prefix+matchKey(name));
+    if(exact!==undefined)return roster.filter(other=>matchKey(`${other.firstName} ${other.lastName}`)===matchKey(name)).length===1?exact??undefined:undefined;
+    const short=abbreviatedPlayerKey(name),middle=middlePlayerKey(name);
+    const uniqueShort=roster.filter(other=>abbreviatedPlayerKey(`${other.firstName} ${other.lastName}`)===short).length===1;
+    const uniqueMiddle=roster.filter(other=>middlePlayerKey(`${other.firstName} ${other.lastName}`)===middle).length===1;
+    return (uniqueShort?xgData.aliases.get(prefix+short):undefined)??(uniqueMiddle?xgData.middleNames.get(prefix+middle):undefined)??undefined;
+  };
+  const playerXg=new Map<number,{apps:number;xg:number;minutes:number}>();
+  for(const player of players){
+    const stints=playerStints.get(player.id);if(!stints?.size)continue;
+    // Some feeds already publish an all-club season total under the current club.
+    // Use that once; never add old-club rows to an already complete season row.
+    const seasonRow=sourceForStint(player,player.squadId);
+    if(seasonRow?.apps===playerEventTotals.get(player.id)?.games){playerXg.set(player.id,seasonRow);continue;}
+    const parts=[...stints].map(([squadId,apps])=>{const row=sourceForStint(player,squadId);return row?.apps===apps?row:null;});
+    if(parts.every(row=>row!=null))playerXg.set(player.id,{apps:parts.reduce((n,r)=>n+r!.apps,0),xg:parts.reduce((n,r)=>n+r!.xg,0),minutes:parts.reduce((n,r)=>n+r!.minutes,0)});
   }
 
   const allPicks: PlayerPick[] = [];
@@ -231,11 +271,7 @@ export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: 
     const expectedMinutes = (agg.minutes + 150) / (agg.games + 2);
     const minuteFactor = Math.max(0.94, Math.min(1.06, 1 + 0.15 * (expectedMinutes - 75) / 75));
     const fullName = `${player.firstName} ${player.lastName}`.trim();
-    const exactXg = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
-    const abbreviated = abbreviatedPlayerKey(fullName);
-    const uniqueOfficial = players.filter(other=>other.squadId===player.squadId && abbreviatedPlayerKey(`${other.firstName} ${other.lastName}`)===abbreviated).length===1;
-    const aliasXg = squad && uniqueOfficial && abbreviated ? xgData.aliases.get(`${player.competitionId}:${matchKey(squad.name)}:${abbreviated}`) : undefined;
-    const sourceXg = exactXg ?? aliasXg;
+    const sourceXg = playerXg.get(player.id);
     // Missing, ambiguous or out-of-sync feeds leave the goal baseline unchanged.
     const matchedXg = sourceXg?.apps === agg.games ? sourceXg : undefined;
     const expectedGoals = blendXgGoalPoints(expected.goals, matchedXg?.xg ?? null, matchedXg?.minutes ?? null, expectedMinutes, player.position);
@@ -271,11 +307,7 @@ export async function calculateDashboard(snapshot?: XgSnapshot, targetRoundId?: 
     if (!events?.games) return [];
     const fullName = `${player.firstName} ${player.lastName}`.trim();
     const squad = squadsById.get(player.squadId);
-    const exact = squad ? xgRows.get(`${player.competitionId}:${matchKey(squad.name)}:${matchKey(fullName)}`) : undefined;
-    const abbreviated = abbreviatedPlayerKey(fullName);
-    const uniqueOfficial = players.filter(other => other.squadId === player.squadId && abbreviatedPlayerKey(`${other.firstName} ${other.lastName}`) === abbreviated).length === 1;
-    const alias = squad && uniqueOfficial && abbreviated ? xgData.aliases.get(`${player.competitionId}:${matchKey(squad.name)}:${abbreviated}`) : undefined;
-    const sourceXg = exact ?? alias;
+    const sourceXg = playerXg.get(player.id);
     const xg = sourceXg?.apps === events.games ? sourceXg : undefined;
     return [{ id: player.id, fullName, team: names.get(player.squadId) ?? "—", jerseyUrl: squad?.jersey || squad?.lightBadge || squad?.darkBadge || "", teamLogo: squad?.lightBadge || squad?.darkBadge || "", competitionId: player.competitionId, position: player.position, appearances: events.games, ownership: Number((player.percentSelected ?? 0).toFixed(1)), xg: xg?.xg ?? null, xg90: xg ? Number((xg.xg * 90 / xg.minutes).toFixed(3)) : null, xgMinutes: xg?.minutes ?? null, goals90: events.totals.minutesPlayed > 0 ? Number((events.totals.goalsScored * 90 / events.totals.minutesPlayed).toFixed(3)) : null, seasonGoals: xg ? events.totals.goalsScored : null, perGame: Object.fromEntries(statKeys.map((key) => [key, events.totals[key] / events.games])) as Record<StatKey, number> }];
   });

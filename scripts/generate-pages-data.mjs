@@ -1,4 +1,5 @@
 import {alignAdvanced} from "./align-advanced.mjs";
+import {attachTransferData} from './attach-transfer-data.mjs';
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -43,9 +44,11 @@ for(const round of rounds) {
 const next=views.find(v=>v.meta.roundId===(current.id===primary.id?upcoming?.id:primary.id));
 if(next)data.upcomingRound=next;
 const advanced = JSON.parse(await readFile(new URL('../data/player-advanced.json', import.meta.url),'utf8'));
-const matched=alignAdvanced(data.playerStats,officialSquads,advanced);
+let matched=alignAdvanced(data.playerStats,officialSquads,advanced);
 const fotmob=JSON.parse(await readFile(new URL("../data/fotmob-attacking.json",import.meta.url),"utf8"));
 attachAttacking(data,officialSquads,fotmob,advanced);
+attachTransferData(data,inputs,advanced,fotmob);
+matched=data.playerStats.filter(p=>p.advanced).length;
 data.setPieces=await buildSetPieces(officialSquads,advanced);
 const statzAccess=await readFile(new URL('../data/statz-access.json',import.meta.url),'utf8').then(JSON.parse).catch(()=>({}));
 data.sourceHealth={generatedAt:new Date().toISOString(),advancedMatched:matched,playerCount:data.playerStats.length,sources:[

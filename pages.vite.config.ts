@@ -8,5 +8,5 @@ export default defineConfig({
   publicDir: "../public",
   plugins: [react()],
   resolve: { alias: { "@": fileURLToPath(new URL("./", import.meta.url)) } },
-  build: { rolldownOptions: { input: { main: fileURLToPath(new URL("./pages/index.html", import.meta.url)), personal: fileURLToPath(new URL("./pages/personal.html", import.meta.url)) } }, outDir: "../pages-dist", emptyOutDir: true },
+  build: { rolldownOptions: { input: { main: fileURLToPath(new URL("./pages/index.html", import.meta.url)), personal: fileURLToPath(new URL("./pages/personal.html", import.meta.url)), fpl: fileURLToPath(new URL('./pages/fpl.html', import.meta.url)), fplPersonal: fileURLToPath(new URL('./pages/fpl-personal.html', import.meta.url)) } }, outDir: "../pages-dist", emptyOutDir: true },
 });

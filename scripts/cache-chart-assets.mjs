@@ -6,7 +6,7 @@ export async function cacheChartAssets(data) {
   const folder = new URL("../public/chart-assets/", import.meta.url);
   await mkdir(folder, {recursive:true});
   const references=[];
-  const imageKeys=new Set(["jerseyUrl","teamLogo","fallbackImage","avatarUrl","logo","opponentLogo"]);
+  const imageKeys=new Set(["jerseyUrl","keeperJerseyUrl","teamLogo","fallbackImage","avatarUrl","logo","opponentLogo"]);
   const visit=value=>{
     if(!value || typeof value!=="object") return;
     for(const [key,child] of Object.entries(value)) {

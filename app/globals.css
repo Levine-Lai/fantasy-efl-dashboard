@@ -46,6 +46,15 @@ a { color: inherit; text-decoration: none; }
 .topbar { position: sticky; top: 0; z-index: 20; height: 68px; display: flex; justify-content: space-between; align-items: center; padding: 0 max(24px, calc((100vw - 1420px) / 2)); color: var(--white); background: var(--navy); border-bottom: 1px solid color-mix(in srgb, var(--white) 16%, transparent); }
 .brand { display: inline-flex; align-items: center; gap: 12px; width: fit-content; font-weight: 800; letter-spacing: .08em; }
 .brand-logo { width: 42px; height: 42px; object-fit: contain; }
+.fantasy-brand-group { display:flex; align-items:center; gap:14px; min-width:0; }
+.game-switcher { display:inline-flex; flex-shrink:0; border:1px solid #ffffff55; border-radius:7px; padding:3px; gap:2px; }
+.game-switcher a { display:block; padding:6px 9px; border-radius:4px; font-size:12px; font-weight:750; line-height:1.2; letter-spacing:.02em; white-space:nowrap; color:white; }
+.game-switcher a[aria-current="page"] { background:white; color:var(--navy); }
+.game-switcher a:hover { background:#ffffff22; }
+.game-switcher a[aria-current="page"]:hover { background:var(--ice); }
+.game-switcher a:focus-visible { outline:2px solid white; outline-offset:3px; }
+@media(max-width:540px) { .fantasy-brand-group { gap:8px; } .fantasy-brand-group .brand { gap:5px; font-size:11px; letter-spacing:.02em; } .fantasy-brand-group .brand-logo { width:28px; height:28px; } .game-switcher a { padding:6px 7px; } }
+@media(max-width:540px) { .dashboard-topbar .fantasy-brand-group .brand { display:none; } }
 .topbar nav { display: flex; gap: 30px; font-size: 14px; font-weight: 650; }
 .topbar nav a { opacity: .76; transition: opacity .2s ease; }
 .topbar nav a:hover, .topbar nav a:focus-visible { opacity: 1; }

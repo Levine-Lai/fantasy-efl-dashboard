@@ -5,10 +5,33 @@ const importTs = async(source)=>import("data:text/javascript;base64,"+Buffer.fro
 const {chartDomain, formatChartTick}=await importTs(await readFile(new URL("../lib/chart-scale.ts",import.meta.url),"utf8"));
 const data=JSON.parse(await readFile(new URL("../pages/dashboard.json",import.meta.url),"utf8"));
 const source=(await readFile(new URL("../lib/dashboard-data.ts",import.meta.url),"utf8")).replace('import { env } from "cloudflare:workers";','const env={DB:null};').replace('async function getXgRows','export async function getXgRows');
-const {abbreviatedPlayerKey,getXgRows}=await importTs(source);
+const {abbreviatedPlayerKey,middlePlayerKey,matchKey,getXgRows}=await importTs(source);
+const {normalize}=await import('./attach-attacking-data.mjs');
+for(const [name,canonical] of [['Joshua Brendan David Magennis','Josh Magennis'],['Onel Lázaro Hernández Mayea','Onel Hernández'],['Emmanuel Monthe','Manny Monthé'],['Ben Brereton Díaz','Ben Brereton'],['Cameron McJannett','Cameron McJannet'],['Taty Castellanos','Valentín Castellanos'],['Fábio André Tavares Desidério','Fábio Tavares'],['Emil Riis Jakobsen','Emil Riis'],['Olutobi Adebayo-Rowling','Tobi Adebayo-Rowling'],['Jordan Gabriel','Jordan Lawrence-Gabriel'],['Luther Wildin','Luther James-Wildin'],['Mike Fondop-Talum','Mike Fondop'],['Chris Forino-Joseph','Chris Forino'],['Andri Guðjohnsen','Andri Gudjohnsen']]) {
+ assert.equal(matchKey(name),matchKey(canonical),name);
+ assert.equal(normalize(name),normalize(canonical),name);
+ assert.equal(matchKey(name),normalize(name),'Core and build matching must use the same identities');
+}
 assert.equal(abbreviatedPlayerKey("Jack Fitzwater"),abbreviatedPlayerKey("J. Fitzwater"));
 assert.notEqual(abbreviatedPlayerKey("Jack Fitzwater"),abbreviatedPlayerKey("Joe Smith"));
+assert.equal(middlePlayerKey('Pelly Mpanzu'),middlePlayerKey('Pelly Ruddock Mpanzu'));
+assert.notEqual(middlePlayerKey('Toti Gomes'),middlePlayerKey('Rodrigo Gomes'),'Different first names never match as middle-name variants');
+assert.equal(middlePlayerKey('Max Weiß'),middlePlayerKey('Max Weiss'));
 const snapshot=JSON.parse(await readFile(new URL("../data/xg-snapshot.json",import.meta.url),"utf8"));
+const {rows:canonicalRows}=await getXgRows(snapshot.season,snapshot);
+const mk=snapshot.players.find(p=>p.team_name==='Milton Keynes Dons'&&p.minutes>0);
+assert.ok(mk);
+assert.ok([...canonicalRows.keys()].some(key=>key.startsWith(`${mk.competitionId}:mkdons:`)),'MK Dons team aliases must resolve');
+const example={competitionId:12,team_name:'Example FC',player_name:'Alex John Example',apps:10,xg:1,minutes:900};
+const middleCollision=await getXgRows(snapshot.season,{...snapshot,players:[...snapshot.players,example,{...example,player_name:'Alex James Example'}]});
+assert.equal(middleCollision.middleNames.get('12:examplefc:alexexample'),null,'Ambiguous middle-name variants must not match');
+const canonicalCollision=await getXgRows(snapshot.season,{...snapshot,players:[...snapshot.players,{...example,player_name:'Géza Turi'},{...example,player_name:'Géza Dávid Turi'}]});
+assert.equal(canonicalCollision.rows.get('12:examplefc:gezaturi'),null,'Duplicate verified variants remain ambiguous');
+for(const [name,key,team] of [['Géza Dávid Turi','gezaturi','grimsbytown'],['Matthew Max Dibley-Dias','mattdibleydias','newportcounty']]) {
+  const row=snapshot.players.find(p=>p.player_name===name);
+  assert.ok(row,`Source identity: ${name}`);
+  assert.equal(canonicalRows.get(`12:${team}:${key}`).xg,row.xg,'Verified full-name variants must retain source values');
+}
 const fitzSource=snapshot.players.find(p=>p.player_name==="J. Fitzwater");
 const fitz=data.playerStats.find(p=>p.fullName==="Jack Fitzwater");
 if(fitzSource && fitz && fitzSource.apps===fitz.appearances) assert.equal(fitz.xg,fitzSource.xg,"Abbreviated player must retain xG");

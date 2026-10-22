@@ -31,6 +31,13 @@ jobs:
       - run: npm ci
       - uses: actions/cache@v4
         with:
+          path: |
+            data/fpl/histories-*.json
+            data/fpl/snapshot.json
+          key: ${{ runner.os }}-fpl-histories-v2-${{ hashFiles('data/fpl/snapshot.json') }}-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-fpl-histories-v2-${{ hashFiles('data/fpl/snapshot.json') }}-
+      - uses: actions/cache@v4
+        with:
           path: data/player-advanced.json
           key: ${{ runner.os }}-advanced-player-v3-${{ hashFiles('data/player-advanced.json') }}-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-advanced-player-v3-${{ hashFiles('data/player-advanced.json') }}-
@@ -43,11 +50,14 @@ jobs:
       - run: node scripts/test-round-selection.mjs
       - run: node league-standings/verify.mjs
       - run: npm run build
+      - run: npm run test:fpl
+      - run: npm run typecheck:fpl
       - run: node scripts/test-chart-data.mjs
       - run: node scripts/test-chart-history.mjs
       - run: node scripts/test-attacking-data.mjs
       - run: node scripts/test-dashboard-features.mjs
       - run: node scripts/test-personal-data.mjs
+      - run: node scripts/test-transfer-data.mjs
       - run: node scripts/test-round-views.mjs
       - run: node scripts/test-fixture-difficulty.mjs
       - uses: actions/upload-pages-artifact@v4

@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["app/fpl-*.tsx", "app/game-switcher.tsx", "pages/fpl.tsx", "lib/fpl-data.ts", "types/worker-env.d.ts"]
+}
