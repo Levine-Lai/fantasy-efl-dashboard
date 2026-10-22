@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-22",
+  "filter": {
+    "league": "League Two",
+    "position": "MID",
+    "minimumMinutes": 450,
+    "x": "xg90",
+    "y": "goals90"
+  },
+  "reportedBefore": {
+    "plotted": 20,
+    "missing": 68
+  },
+  "refreshed": {
+    "eligible": 88,
+    "plotted": 85,
+    "missing": 3
+  },
+  "remaining": [
+    {
+      "name": "Brendan Wiredu",
+      "reason": "Official 12 apps; Statz Salford 11 apps and different full name"
+    },
+    {
+      "name": "Géza Turi",
+      "reason": "Statz full name Géza Dávid Turi does not match"
+    },
+    {
+      "name": "Matt Dibley-Dias",
+      "reason": "Statz full name Matthew Max Dibley-Dias does not match"
+    }
+  ],
+  "cause": "Cloud Statz verification blocks retain old snapshot; strict apps alignment excludes stale rows as official stats advance. Local public refresh succeeded.",
+  "policy": "Keep strict alignment; do not fill missing metrics with zero."
+}
