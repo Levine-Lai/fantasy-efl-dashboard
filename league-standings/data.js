@@ -4,19 +4,19 @@ window.LEAGUE_DATA = {
       "Forrest Gump",
       "6",
       "鲁绍尔奥林匹克足球俱乐部",
-      23
+      26
     ],
     [
       "FAIAA",
       "16",
       "FAIAAAA",
-      4
+      11
     ],
     [
       "Penguin",
       "48",
       "#48 企鹅",
-      16
+      22
     ],
     [
       "last superman",
@@ -28,25 +28,25 @@ window.LEAGUE_DATA = {
       "summerfan",
       "12",
       "Summerfan",
-      6
+      5
     ],
     [
       "faith619",
       "69",
       "faith619",
-      14
+      16
     ],
     [
       "remember",
       "97",
       "remember",
-      18
+      19
     ],
     [
       "average",
       "11",
       "AVG",
-      21
+      17
     ],
     [
       "Golden Sheva",
@@ -58,13 +58,13 @@ window.LEAGUE_DATA = {
       "conan",
       "37",
       "我锤一下试试啊",
-      11
+      9
     ],
     [
       "bad k",
       "35",
       "Super Licence -12",
-      9
+      4
     ],
     [
       "ynwa",
@@ -76,31 +76,31 @@ window.LEAGUE_DATA = {
       "DannytheDestroyer",
       "1",
       "DannytheDestroyer",
-      5
+      6
     ],
     [
       "Eric",
       "2",
       "珠海兵工厂",
-      20
+      21
     ],
     [
       "wujiu",
       "36",
       "英国人画像",
-      26
+      24
     ],
     [
       "owen",
       "10",
       "DNMCCB",
-      10
+      8
     ],
     [
       "dog egg kk",
       "96",
       "#96 GDKK",
-      12
+      10
     ],
     [
       "bill",
@@ -118,19 +118,19 @@ window.LEAGUE_DATA = {
       "acidboy",
       "88",
       "Acidboy",
-      19
+      20
     ],
     [
       "ocean",
       "44",
       "ocean",
-      8
+      14
     ],
     [
       "wu jiahui",
       "5",
       "Zhongvid Moyes",
-      24
+      23
     ],
     [
       "Bamford",
@@ -142,7 +142,7 @@ window.LEAGUE_DATA = {
       "Tierney",
       "29",
       "五星上将萨金特",
-      15
+      12
     ],
     [
       "Benben",
@@ -154,7 +154,7 @@ window.LEAGUE_DATA = {
       "clocat",
       "19",
       "笨雕先EFL",
-      22
+      18
     ],
     [
       "xzz",
@@ -166,7 +166,7 @@ window.LEAGUE_DATA = {
       "HindMics",
       "38",
       "HindMics-永城永江足球俱乐部",
-      17
+      15
     ]
   ],
   "orders": [
@@ -439,6 +439,36 @@ window.LEAGUE_DATA = {
       19,
       2,
       4
+    ],
+    [
+      11,
+      25,
+      26,
+      8,
+      5,
+      15,
+      23,
+      24,
+      22,
+      28,
+      17,
+      9,
+      10,
+      16,
+      12,
+      27,
+      13,
+      18,
+      6,
+      7,
+      20,
+      14,
+      4,
+      21,
+      19,
+      2,
+      3,
+      1
     ]
   ],
   "scores": [
@@ -711,6 +741,36 @@ window.LEAGUE_DATA = {
       94,
       93,
       52
+    ],
+    [
+      173,
+      171,
+      169,
+      158,
+      156,
+      152,
+      152,
+      149,
+      149,
+      141,
+      140,
+      139,
+      139,
+      138,
+      137,
+      132,
+      131,
+      122,
+      121,
+      115,
+      105,
+      104,
+      102,
+      118,
+      100,
+      98,
+      91,
+      50
     ]
   ],
   "awards": [
@@ -724,5 +784,15 @@ window.LEAGUE_DATA = {
     4,
     2,
     1
-  ]
+  ],
+  "update": {
+    "week": 10,
+    "capturedAt": "2026-10-22T02:07:06.833Z",
+    "leagueId": 100,
+    "completedGames": 61,
+    "finalizedGames": 60,
+    "totalGames": 61,
+    "provisional": false,
+    "finalBasis": "user-confirmed-current-scores"
+  }
 };

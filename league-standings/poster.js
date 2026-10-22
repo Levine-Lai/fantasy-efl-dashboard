@@ -19,6 +19,8 @@ async function exportPoster(kind,week,rows,mode='weekly'){
  ctx.textAlign='right';ctx.font=`700 ${driver?28:33}px Formula1`;ctx.fillStyle=driver?palette.white:color;ctx.fillText(String(r.points),966,baseline);
  if(mode==='weekly'&&r.fastest){ctx.font='700 9px Formula1';ctx.fillStyle=palette.purple;ctx.fillText('FL +'+r.fastest,driver?910:968,driver?y+27:y+60);}
  });
+ const update=window.LEAGUE_DATA.update;
+ if(update&&week>=update.week)text(update.finalBasis==='user-confirmed-current-scores'?'FINAL · CONFIRMED CURRENT SCORES':update.provisional?'PROVISIONAL · AWAITING OFFICIAL CONFIRMATION':'FINAL',48,1548,14,palette.muted,984,400);
  text('EFL GRAND PRIX',48,1583,16,palette.muted,620,400);
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('海报生成失败')),'image/png'));const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`EFL_${mode==='weekly'?'GW'+String(week).padStart(2,'0'):'ALL_GW'}_${kind}_1080x1620.png`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
  return {width:canvas.width,height:canvas.height};

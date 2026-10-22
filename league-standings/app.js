@@ -13,6 +13,9 @@ function standings(kind,mode,week){const weekly=mode==='weekly';const value=id=>
 const latestWeek=orders.length;
 function selection(){const weekly=$('week').value!=='all';return {week:weekly?+$('week').value:latestWeek,mode:weekly?'weekly':'cumulative',weekly};}
 function render(){const {week,mode,weekly}=selection();const all=standings(type,mode,week),q=$('search').value.trim().toLowerCase(),rows=all.filter(r=>[r.name,r.detail,r.number,r.team].join(' ').toLowerCase().includes(q));
+ const update=window.LEAGUE_DATA.update;
+ $('week-range').textContent=`GW 01—${String(latestWeek).padStart(2,'0')}`;
+ $('source-status').textContent=update&&week>=update.week?`GW ${update.week} ${update.finalBasis==='user-confirmed-current-scores'?'已按当前积分定稿':update.provisional?'待官方最终确认':'已结算'} · 数据截至 ${new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(update.capturedAt))}`:'';
  $('display-title').textContent=type==='drivers'?'DRIVER STANDINGS':'CONSTRUCTOR STANDINGS';
  $('drivers').setAttribute('aria-pressed',type==='drivers');$('teams').setAttribute('aria-pressed',type==='teams');$('search-label').textContent=type==='drivers'?'筛选车手':'筛选车队';
  $('prev').disabled=weekly&&week===1;$('next').disabled=!weekly;
