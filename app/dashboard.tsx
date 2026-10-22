@@ -375,7 +375,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
       <header className="topbar dashboard-topbar">
         <div className="fantasy-brand-group"><GameSwitcher game="efl" /><a className="brand" href="#top" aria-label="Fantasy EFL 看板首页"><img className="brand-logo" src="./official-fantasy-efl.png" alt="Fantasy EFL" /><span>FANTASY EFL</span></a></div>
         <div className="round-navigation" role="group" aria-label="切换 Gameweek"><button type="button" aria-label="上一个 GW" disabled={roundPosition<=0} onClick={()=>chooseRound(roundIndex[roundPosition-1].id)}><ChevronLeft size={17}/></button><FilterSelect aria-label="选择 GW" value={String(selectedRound)} onValueChange={value=>chooseRound(Number(value))}>{roundIndex.map(r=><option key={r.id} value={String(r.id)}>{r.name} · {r.state==="completed"?"已结束":r.state==="current"?"当前":"待赛"}</option>)}</FilterSelect><button type="button" aria-label="下一个 GW" disabled={roundPosition<0||roundPosition>=roundIndex.length-1} onClick={()=>chooseRound(roundIndex[roundPosition+1].id)}><ChevronRight size={17}/></button></div>
-        <nav><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href={"./personal.html?gw="+selectedRound}>个人数据</a><a href="#clubs">球队</a><a href="#fixtures">赛程</a></nav>
+        <nav className="efl-nav"><a href="#recommendations">推荐</a><a href="#stats">场均数据</a><a href={"./personal.html?gw="+selectedRound}>个人数据</a><a href="#clubs">球队</a><a href="#fixtures">赛程</a><a className="grand-prix-link" href="./grand-prix-standing/">大奖赛积分榜</a></nav>
       </header>
 
       <div className="dashboard-shell" id="top">
