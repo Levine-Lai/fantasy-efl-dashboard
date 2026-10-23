@@ -42,7 +42,7 @@ export function normalizeHistory(rows, fixtures) {
     if (!Number.isFinite(Date.parse(r.kickoff_time))) throw Error('FPL invalid history date');
     return [{ fixture: r.fixture, round: f.event, date: r.kickoff_time, opponent: r.opponent_team, home: !!r.was_home,
       ...Object.fromEntries(Object.entries({ minutes: 'minutes', points: 'total_points', goals: 'goals_scored', assists: 'assists', cleanSheets: 'clean_sheets', conceded: 'goals_conceded', saves: 'saves', bonus: 'bonus', bps: 'bps', starts: 'starts' }).map(([key, raw]) => [key, requiredNumber(r[raw], raw)])),
-      ...Object.fromEntries(Object.entries({ xg: 'expected_goals', xa: 'expected_assists', xgi: 'expected_goal_involvements', cbi: 'clearances_blocks_interceptions', tackles: 'tackles', recoveries: 'recoveries', defensive: 'defensive_contribution' }).map(([key, raw]) => [key, number(r[raw])])),
+      ...Object.fromEntries(Object.entries({ xg: 'expected_goals', xa: 'expected_assists', xgi: 'expected_goal_involvements', cbi: 'clearances_blocks_interceptions', tackles: 'tackles', recoveries: 'recoveries', defensive: 'defensive_contribution', yellowCards: 'yellow_cards', redCards: 'red_cards' }).map(([key, raw]) => [key, number(r[raw])])),
     }];
   });
 }
@@ -62,7 +62,7 @@ export async function generateFpl() {
   const reuse = old?.season === season && old.signature === signature && Date.now() - Date.parse(old.capturedAt) < 3 * 3600000;
   const histories = {};
   let cursor = 0;
-  const active = bootstrap.elements.filter(p => Number(p.minutes) > 0);
+  const active = bootstrap.elements.filter(p => Number(p.minutes) > 0 || number(p.total_points) != null && Number(p.total_points) !== 0);
   await Promise.all(Array.from({ length: 8 }, async () => {
     while (cursor < active.length) {
       const index = cursor++, p = active[index];

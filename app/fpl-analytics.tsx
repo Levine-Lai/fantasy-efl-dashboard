@@ -3,13 +3,14 @@ import { ChartScatter, Download } from 'lucide-react';
 import { FilterSelect } from '../components/ui/filter-select';
 import { chartDomain, formatChartTick } from '../lib/chart-scale';
 import { exportChartPng } from '../lib/export-chart';
-import { fplMetrics, fplPositionNames, fplShirt, fplTeamRows, matchSample, total } from '../lib/fpl-data';
+import { fplMetrics, fplPositionNames, fplShirt, fplTeamRows, fplTeamColumns, matchSample, total } from '../lib/fpl-data';
 import type { FplData, FplPosition, FplTeamRow } from '../lib/fpl-data';
 
-export const teamMetrics = [
-  {key:'goalsGame',label:'进球 / 场'}, {key:'concededGame',label:'失球 / 场',lower:true},
-  {key:'pointsGame',label:'联赛积分 / 场'}, {key:'winRate',label:'胜率 · %'}, {key:'cleanRate',label:'零封率 · %'}, {key:'played',label:'已赛场数'},
-] as const;
+export const teamMetrics = fplTeamColumns.flatMap(m=>[
+  {key:m.key,label:m.label+(m.percent?' · %':''),lower:!!m.lower,group:m.group},
+  ...(m.rate?[{key:m.rate,label:m.label+' / '+(m.unit??'90'),lower:!!m.lower,group:m.group}]:[]),
+]);
+
 type Dot = { id: string; name: string; image: string; x: number; y: number; subtitle: string; detail: string };
 export function FplAnalytics({ data, gw }: { data: FplData; gw: number }) {
   const [mode, setMode] = useState<'player' | 'team'>('team');
@@ -23,9 +24,9 @@ export function FplAnalytics({ data, gw }: { data: FplData; gw: number }) {
   const teamRows = useMemo(() => fplTeamRows(data, gw, recent), [data, gw, recent]);
   const playerRows = useMemo(() => data.players.filter(p => (position === 'ALL' || position === 'ATT' && ['MID', 'FWD'].includes(p.position) || p.position === position) && (total(matchSample(p, gw), 'minutes') ?? 0) >= minimum).map(player => ({player, matches:matchSample(player,gw,recent)})).filter(r=>r.matches.length), [data, gw, recent, position, minimum]);
   const playerMetrics = fplMetrics.filter(m => position === 'GK' ? !['goals','assists','xg','xa','xgi','defensive','dcRate'].includes(m.key) : m.key !== 'saves');
-  const metrics = mode === 'team' ? teamMetrics.map(m => ({...m,group:'球队数据'})) : playerMetrics.map(m=>({...m,group:['price','ownership','transfersIn','transfersOut','transfersNet','priceChange','value'].includes(m.key)?'价格与热度':m.key.startsWith('x')?'预期与效率':'基础表现'}));
+  const metrics = mode === 'team' ? teamMetrics : playerMetrics.map(m=>({...m,group:['price','ownership','transfersIn','transfersOut','transfersNet','priceChange','value'].includes(m.key)?'价格与热度':m.key.startsWith('x')?'预期与效率':'基础表现'}));
   const activeX = metrics.find(m => m.key === xKey) ?? metrics[0], activeY = metrics.find(m => m.key === yKey) ?? metrics[1];
-  const lower = (key: string) => key === 'conceded' || key === 'concededGame';
+  const lower = (key: string) => mode==='team'?!!teamMetrics.find(m=>m.key===key)?.lower:!!fplMetrics.find(m=>m.key===key)?.lower;
   const dots: Dot[] = mode === 'team' ? teamRows.flatMap(row => {
     const a = row[activeX.key as keyof FplTeamRow], b = row[activeY.key as keyof FplTeamRow];
     if (typeof a !== 'number' || typeof b !== 'number' || !row.played) return [];
@@ -35,7 +36,7 @@ export function FplAnalytics({ data, gw }: { data: FplData; gw: number }) {
     if(a==null || b==null || !Number.isFinite(a)||!Number.isFinite(b))return [];
     return [{id:`player-${p.id}`,name:p.name,image:fplShirt(p,teams.get(p.team)),x:a,y:b,subtitle:`${teams.get(p.team)?.name} · ${matches.length} 场`,detail:`${activeX.label} ${a.toFixed(2)} · ${activeY.label} ${b.toFixed(2)}`}];
   });
-  const comparison = mode==='player' && activeX.key==='xg' && activeY.key==='goals';
+  const comparison = activeX.key==='xg' && activeY.key==='goals' || mode==='team' && activeX.key==='xgGame' && activeY.key==='goalsGame';
   const dx=chartDomain(comparison?dots.flatMap(d=>[d.x,d.y]):dots.map(d=>d.x)),dy=comparison?dx:chartDomain(dots.map(d=>d.y));
   const left=92,top=68,size=654,right=746,bottom=722,radius=16;
   const x=(v:number)=>left+(lower(activeX.key)?1-(v-dx[0])/(dx[1]-dx[0]):(v-dx[0])/(dx[1]-dx[0]))*size;
