@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { cacheChartAssets } from './cache-chart-assets.mjs';
+import { updateFplSupplemental } from './fpl-supplemental.mjs';
 
 const api = 'https://fantasy.premierleague.com/api/';
 const root = new URL('../data/fpl/', import.meta.url);
@@ -86,6 +87,7 @@ export async function generateFpl() {
     rules: { budget: bootstrap.game_settings.squad_total_spend / multiplier, squadSize: bootstrap.game_settings.squad_squadsize, starters: bootstrap.game_settings.squad_squadplay, teamLimit: bootstrap.game_settings.squad_team_limit },
     scoring: bootstrap.game_config?.scoring ?? {},
   };
+  await updateFplSupplemental(data);
   await cacheChartAssets(data);
   await atomic(new URL('raw.json', root), { season, capturedAt, bootstrap, fixtures });
   if (!reuse) await atomic(historyFile, { season, capturedAt, signature, players: histories });

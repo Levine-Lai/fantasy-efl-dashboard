@@ -1,18 +1,27 @@
 export type FplPosition = 'GK' | 'DEF' | 'MID' | 'FWD';
+export type FplSupplementRow = {id:number;team?:number;fixtureIds:number[];minutes?:number;officialMinutes?:number;played?:number;metrics:Record<string,number|null>};
+export type FplSupplement = {season:string;capturedAt:string;source:string;stale?:boolean;teams:FplSupplementRow[];players:FplSupplementRow[]};
 export type FplMatch = { fixture: number; round: number; date: string; opponent: number; home: boolean; minutes: number; points: number; goals: number; assists: number; cleanSheets: number; conceded: number; saves: number; bonus: number; bps: number; xg: number | null; xa: number | null; xgi: number | null; cbi: number | null; tackles: number | null; recoveries: number | null; defensive: number | null; starts: number; yellowCards?: number | null; redCards?: number | null };
-export type FplPlayer = { id: number; name: string; fullName: string; team: number; position: FplPosition; price: number; ownership: number | null; transfersIn: number; transfersOut: number; priceChange: number; status: string; news: string; newsAt: string | null; chance: number | null; epNext: number | null; epThis: number | null; setPieces: { penalties: number | null; corners: number | null; freeKicks: number | null }; history: FplMatch[] };
+export type FplPlayer = { id: number; name: string; fullName: string; team: number; position: FplPosition; price: number; ownership: number | null; transfersIn: number; transfersOut: number; priceChange: number; status: string; news: string; newsAt: string | null; chance: number | null; epNext: number | null; epThis: number | null; setPieces: { penalties: number | null; corners: number | null; freeKicks: number | null }; history: FplMatch[]; supplemental?: FplSupplementRow };
 export type FplTeam = { id: number; name: string; shortName: string; logo: string; jerseyUrl?: string; keeperJerseyUrl?: string };
 export type FplFixture = { id: number; event: number | null; date: string | null; home: number; away: number; homeScore: number | null; awayScore: number | null; finished: boolean; provisional: boolean; started: boolean; homeDifficulty: number | null; awayDifficulty: number | null };
 export type FplEvent = { id: number; name: string; deadline: string; finished: boolean; checked: boolean; current: boolean; next: boolean };
-export type FplData = { schemaVersion: number; season: string; capturedAt: string; historyCapturedAt: string; stale: boolean; warning: string | null; currentEvent: number; players: FplPlayer[]; teams: FplTeam[]; fixtures: FplFixture[]; events: FplEvent[]; rules: { budget: number; squadSize: number; starters: number; teamLimit: number }; scoring: Record<string, unknown> };
+export type FplData = { schemaVersion: number; season: string; capturedAt: string; historyCapturedAt: string; stale: boolean; warning: string | null; currentEvent: number; players: FplPlayer[]; teams: FplTeam[]; fixtures: FplFixture[]; events: FplEvent[]; rules: { budget: number; squadSize: number; starters: number; teamLimit: number }; scoring: Record<string, unknown>; supplemental?: FplSupplement };
 
 export const fplPositionNames: Record<FplPosition, string> = { GK: '门将', DEF: '后卫', MID: '中场', FWD: '前锋' };
-export type FplMetric = { key: string; label: string; lower?: boolean; format?: 'money' | 'percent'; value: (p: FplPlayer, matches: FplMatch[]) => number | null };
+export type FplMetric = { key: string; label: string; lower?: boolean; format?: 'money' | 'percent'; source?:string; value: (p: FplPlayer, matches: FplMatch[]) => number | null };
 export const total = (rows: FplMatch[], key: keyof FplMatch): number | null => rows.length && rows.every(r => typeof r[key] === 'number' && Number.isFinite(r[key])) ? rows.reduce((s, r) => s + Number(r[key]), 0) : null;
 const rate = (rows: FplMatch[], key: keyof FplMatch, per90 = false) => {
   const value = total(rows, key), denominator = per90 ? total(rows, 'minutes') : rows.length;
   return value == null || !denominator ? null : value * (per90 ? 90 : 1) / denominator;
 };
+export const fplSupplementPlayerMetrics: FplMetric[] = [
+  ['bigChancesCreated','创造重大机会'],['bigChancesMissed','错失重大机会'],['chancesCreated','创造机会'],['shots','射门'],['shotsOnTarget','射正'],['crosses','传中'],['successfulDribbles','成功过人'],
+].map(([key,label])=>({key:'supplement_'+key,label:label+' / 90',source:'Statz',lower:key==='bigChancesMissed',value:(p:FplPlayer,matches:FplMatch[])=>{
+  const row=p.supplemental,value=row?.metrics[key];
+  if(value==null||!row?.minutes||matches.length!==row.fixtureIds.length||matches.some(m=>!row.fixtureIds.includes(m.fixture))||total(matches,'minutes')!==row.officialMinutes)return null;
+  return value*90/row.minutes;
+}}));
 export const fplMetrics: FplMetric[] = [
   { key: 'points', label: 'Fantasy 总分', value: (_, r) => total(r, 'points') },
   { key: 'ppg', label: 'Fantasy 得分 / 场', value: (_, r) => rate(r, 'points') },
@@ -38,6 +47,7 @@ export const fplMetrics: FplMetric[] = [
   { key: 'transfersNet', label: '当前轮净转入', value: p => p.transfersIn - p.transfersOut },
   { key: 'priceChange', label: '开季至今价格变化 £m', value: p => p.priceChange },
   { key: 'value', label: '场均得分 / 当前£m', value: (p, r) => { const n = rate(r, 'points'); return n == null || p.price <= 0 ? null : n / p.price; } },
+  ...fplSupplementPlayerMetrics,
 ];
 export function matchSample(player: FplPlayer, through: number, recent = 0): FplMatch[] {
   const rows = player.history.filter(m => m.round <= through && m.minutes > 0).sort((a, b) => Date.parse(a.date) - Date.parse(b.date) || a.fixture - b.fixture);
@@ -84,8 +94,9 @@ export function fplExpectedLeaguePoints(xg:number|null,xga:number|null):number|n
 }
 
 type TeamCountKey = 'fantasyPoints'|'assists'|'saves'|'tackles'|'cbi'|'recoveries'|'yellowCards'|'redCards';
-type TeamRateBase = TeamCountKey|'points'|'goals'|'conceded'|'goalDifference'|'xg'|'xga'|'xgd'|'xpts'|'pointsDelta'|'finishingDelta';
-export type FplTeamRow = Record<TeamCountKey,number|null> & Record<`${TeamRateBase}Game`,number|null> & {
+type TeamExtraKey = 'bigChances'|'bigChancesAgainst'|'bigChancesMissed'|'bigChancesScored'|'shots'|'shotsAgainst'|'shotsOnTarget'|'shotsOnTargetAgainst'|'shotsInBox'|'corners'|'cornersAgainst'|'chancesCreated'|'interceptions'|'passes'|'accuratePasses'|'crosses'|'accurateCrosses'|'duelsWon';
+type TeamRateBase = TeamExtraKey|TeamCountKey|'points'|'goals'|'conceded'|'goalDifference'|'xg'|'xga'|'xgd'|'xpts'|'pointsDelta'|'finishingDelta';
+export type FplTeamRow = Record<TeamExtraKey|TeamCountKey,number|null> & Record<`${TeamRateBase}Game`,number|null> & {
   team:FplTeam; played:number; minutes:number; wins:number; draws:number; losses:number; cleanSheets:number;
   points:number; goals:number; conceded:number; goalDifference:number;
   xg:number|null; xga:number|null; xgd:number|null; xgShare:number|null; xpts:number|null; pointsDelta:number|null; finishingDelta:number|null;
@@ -93,6 +104,9 @@ export type FplTeamRow = Record<TeamCountKey,number|null> & Record<`${TeamRateBa
 };
 export type FplTeamMetricKey = Exclude<keyof FplTeamRow,'team'|'form'>;
 export type FplTeamMetric = {key:FplTeamMetricKey;label:string;rate?:FplTeamMetricKey;unit?:string;percent?:boolean;integer?:boolean;lower?:boolean;group:string};
+const extraColumns: FplTeamMetric[] = ([
+  ['bigChances','重大机会'],['bigChancesAgainst','被创造重大机会'],['bigChancesMissed','错失重大机会'],['bigChancesScored','重大机会进球'],['shots','射门'],['shotsAgainst','被射门'],['shotsOnTarget','射正'],['shotsOnTargetAgainst','被射正'],['shotsInBox','禁区内射门'],['corners','角球'],['cornersAgainst','被获角球'],['chancesCreated','创造机会'],['interceptions','拦截'],['passes','传球'],['accuratePasses','成功传球'],['crosses','传中'],['accurateCrosses','成功传中'],['duelsWon','赢得对抗'],
+] as [TeamExtraKey,string][]).map(([key,label])=>({key,rate:`${key}Game`,label,integer:true,lower:['bigChancesAgainst','bigChancesMissed','shotsAgainst','shotsOnTargetAgainst','cornersAgainst'].includes(key),group:'补充数据'}));
 export const fplTeamColumns:readonly FplTeamMetric[] = [
   {key:'played',label:'已赛',integer:true,group:'战绩'},
   {key:'fantasyPoints',rate:'fantasyPointsGame',label:'球员 Fantasy 得分',integer:true,group:'战绩'},
@@ -120,6 +134,7 @@ export const fplTeamColumns:readonly FplTeamMetric[] = [
   {key:'recoveries',rate:'recoveriesGame',label:'回收球权',integer:true,group:'基础表现'},
   {key:'yellowCards',rate:'yellowCardsGame',label:'黄牌',integer:true,lower:true,group:'基础表现'},
   {key:'redCards',rate:'redCardsGame',label:'红牌',integer:true,lower:true,group:'基础表现'},
+  ...extraColumns,
 ];
 
 export function fplTeamRows(data:FplData,through:number,recent=0):FplTeamRow[] {
@@ -137,8 +152,11 @@ export function fplTeamRows(data:FplData,through:number,recent=0):FplTeamRow[] {
     const xpts=played&&expectations.every(v=>v!=null)?expectations.reduce<number>((n,v)=>n+v!,0):null;
     const totals={points,goals,conceded,goalDifference:goals-conceded,xg,xga,xgd,xpts,pointsDelta:xpts!=null?points-xpts:null,finishingDelta:xg!=null?goals-xg:null,
       fantasyPoints:sum(own,'points'),assists:sum(own,'assists'),saves:sum(own,'saves'),tackles:sum(own,'tackles'),cbi:sum(own,'cbi'),recoveries:sum(own,'recoveries'),yellowCards:sum(own,'yellowCards'),redCards:sum(own,'redCards')};
-    const rates=Object.fromEntries(Object.entries(totals).map(([key,value])=>[key+'Game',played&&value!=null?value/played:null])) as Record<`${TeamRateBase}Game`,number|null>;
-    return {team,played,minutes:90*played,wins,draws,losses:played-wins-draws,cleanSheets,...totals,...rates,xgShare:xg!=null&&xga!=null&&xg+xga>0?100*xg/(xg+xga):null,winRate:played?100*wins/played:null,cleanRate:played?100*cleanSheets/played:null,form:form.slice(-5)};
+    const source=data.supplemental&&data.supplemental.season===data.season?data.supplemental.teams.find(r=>r.id===team.id):undefined;
+    const aligned=source&&games.length===source.fixtureIds.length&&games.every(f=>source.fixtureIds.includes(f.id));
+    const extras=Object.fromEntries(extraColumns.map(c=>[c.key,aligned?source.metrics[c.key]??null:null])) as Record<TeamExtraKey,number|null>;
+    const rates=Object.fromEntries(Object.entries({...totals,...extras}).map(([key,value])=>[key+'Game',played&&value!=null?value/played:null])) as Record<`${TeamRateBase}Game`,number|null>;
+    return {team,played,minutes:90*played,wins,draws,losses:played-wins-draws,cleanSheets,...totals,...extras,...rates,xgShare:xg!=null&&xga!=null&&xg+xga>0?100*xg/(xg+xga):null,winRate:played?100*wins/played:null,cleanRate:played?100*cleanSheets/played:null,form:form.slice(-5)};
   });
 }
 export type FplRankedPlayer = { player: FplPlayer; score: number; minutes: number | null; actual: boolean };
