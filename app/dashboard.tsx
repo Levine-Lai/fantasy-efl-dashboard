@@ -9,7 +9,7 @@ import {attackingMetrics,attackingColumns,attackingValue,isAttackKey} from "@/li
 import type {AttackKey} from "@/lib/attacking-metrics";
 import {SetPieceTable} from "./set-piece-table";
 import { RoundFixtures } from "./round-fixtures";
-import { defaultRound, loadRound } from "@/lib/round-view";
+import { defaultRound, loadRound, fixtureCounts } from "@/lib/round-view";
 import { TeamStatsTable } from "./team-stats-table";
 import { ranking, tint } from "@/lib/player-profile";
 import { leagueOptions, includesLeague, leagueLabel } from "@/lib/league-selection";
@@ -17,7 +17,7 @@ import { chartDomain, formatChartTick } from "@/lib/chart-scale";
 import { exportChartPng } from "@/lib/export-chart";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DashboardData, RoundView, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
+import type { DashboardData, RoundView, RoundFixture, FixtureBadge, PlayerPick, PlayerStat, StatKey, TeamStat } from "@/lib/dashboard-data";
 
 const positions = ["GK", "DEF", "MID", "FWD"] as const;
 const positionName = { GK: "门将", DEF: "后卫", MID: "中场", FWD: "前锋" };
@@ -158,11 +158,16 @@ function formatUpdated(value: string) { return value ? new Intl.DateTimeFormat("
 
 type AnalyticsDatum = { id: string; name: string; image: string; x: number; y: number; subtitle: string; detail: string };
 
-function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, historical=false,roundId,historyFile }: { roundId:number;historyFile?:string;players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string; historical?:boolean }) {
+function OpportunityChart({ players, teams, fixtures, xgUpdatedAt, officialUpdatedAt, historical=false,roundId,historyFile }: { roundId:number;historyFile?:string;fixtures:RoundFixture[];players: PlayerStat[]; teams: TeamStat[]; xgUpdatedAt: string; officialUpdatedAt: string; historical?:boolean }) {
   const [mode, setMode] = useState<"team" | "player">("team");
   const [competition, setCompetition] = useState("10");
   const [position, setPosition] = useState("ATT");
   const [minimum, setMinimum] = useState(historical?90:450);
+  const [doubleOnly,setDoubleOnly]=useState(false);
+  const doubleTeams=useMemo(()=>{
+    const counts=fixtureCounts(fixtures);
+    return new Set(teams.filter(t=>(counts.get(t.id)??0)>1).flatMap(t=>[`${t.competitionId}:${t.name}`,`${t.competitionId}:${t.fullName}`]));
+  },[fixtures,teams]);
   const svgRef = useRef<SVGSVGElement>(null);
   const [loadChartImages, setLoadChartImages] = useState(false);
   useEffect(() => {
@@ -229,7 +234,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
     const value = "perGame" in row && key in row.perGame ? row.perGame[key as StatKey] : (row as unknown as Record<string, unknown>)[key];
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   };
-  const candidates = mode === "team" ? windowStats.teams.filter(t=>includesLeague(competition,t.competitionId)) : windowStats.players.filter(p=>eligiblePlayers.has(p.id) && includesLeague(competition,p.competitionId) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
+  const candidates = mode === "team" ? windowStats.teams.filter(t=>includesLeague(competition,t.competitionId)) : windowStats.players.filter(p=>eligiblePlayers.has(p.id) && (!doubleOnly||doubleTeams.has(`${p.competitionId}:${p.team}`)) && includesLeague(competition,p.competitionId) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
   const dots: AnalyticsDatum[] = candidates.flatMap(row=>{
     const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
     return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
@@ -282,6 +287,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
           <label>联赛级别<FilterSelect value={competition} onValueChange={(value) => { setCompetition(value); setHovered(null); }}>{leagueOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></label>
           {mode === "player" && <><label>位置<FilterSelect value={position} onValueChange={(value) => { setPosition(value); setHovered(null); }}><option value="ATT">中场 + 前锋</option><option value="ALL">全部位置</option><option value="MID">中场</option><option value="FWD">前锋</option><option value="DEF">后卫</option><option value="GK">门将</option></FilterSelect></label><label>累计至少出场<FilterSelect value={minimum} onValueChange={(value) => { setMinimum(Number(value)); setHovered(null); }}><option value={90}>90 分钟</option><option value={270}>270 分钟</option><option value={450}>450 分钟</option><option value={900}>900 分钟</option></FilterSelect></label></>}
         </div>
+        {mode==='player'&&<button type="button" className="double-filter" aria-pressed={doubleOnly} onClick={()=>{setDoubleOnly(v=>!v);setHovered(null);setPinned(null);}}>只看双赛球员</button>}
         <div className="analytics-count">{periodLabel} · {dots.length} {mode === "team" ? "支球队" : "名球员"} · 指标缺失 {candidates.length-dots.length}</div>
         {candidates.length>dots.length&&<p className="chart-window-note">指标缺失表示当前横轴或纵轴没有可对齐的数据，球员仍保留在数据库中。xG 与官方出场数不同步、来源未收录或姓名未匹配时暂不绘点；缺失不按零计算。</p>}
         {shortPeriod&&<p className="chart-window-note">按每支球队最近比赛 / 每名球员最近实际出场统计，少于所选场数按实际样本计算；双赛逐场计数。累计分钟门槛仍按所选 GW 的累计样本。短期 xG、xA、xGI、射门、传中与成功过人无逐场来源，暂不提供。</p>}
@@ -293,7 +299,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
           if (!svgRef.current) return;
           setExporting(true); setExportStatus("正在生成图片…");
           try {
-            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + periodLabel + " · " + leagueLabel(competition) + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + "-" + period + ".png" });
+            const fallbackCount = await exportChartPng(svgRef.current, { title: xLabel + " × " + yLabel, description: (mode === "team" ? "球队" : "球员") + " · " + periodLabel + " · " + leagueLabel(competition) + (mode === "player" ? " · " + (positionName[position as keyof typeof positionName] ?? (position === "ATT" ? "中场 + 前锋" : "全部位置")) + " · 至少 " + minimum + " 分钟" + (doubleOnly?" · 本轮双赛":"") : "") + " · " + dots.length + " 个有效数据点 · 缺失 " + (candidates.length - dots.length), source: "Fantasy EFL / Statz · 官方抓取 " + formatUpdated(officialUpdatedAt) + " · xG 抓取 " + formatUpdated(xgUpdatedAt) + "（北京时间）", filename: "fantasy-efl-" + mode + "-" + activeXKey + "-" + activeYKey + "-" + period + (mode==="player"&&doubleOnly?"-double":"") + ".png" });
             setExportStatus(fallbackCount ? "图片已导出，部分球衣无法加载，已以文字标记替代。" : "图片已导出");
           } catch { setExportStatus("导出失败，请重试。"); }
           finally { setExporting(false); }
@@ -328,7 +334,7 @@ function OpportunityChart({ players, teams, xgUpdatedAt, officialUpdatedAt, hist
 
           <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{xLabel+(lowerBetter(activeXKey)?"（向右越低）":" →")}</text>
           <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{yLabel+(lowerBetter(activeYKey)?"（向上越低）":" ↑")}</text>
-        </svg>{!dots.length && <p className="stats-empty">当前筛选无可用数据，请更换指标或降低出场门槛。</p>}</div><div className="chart-touch-detail" aria-live="polite">{selected?<><strong>{selected.name}</strong><span>{selected.detail}</span></>:<span>轻点图中球队或球员，查看完整数据</span>}</div>
+        </svg>{!dots.length && <p className="stats-empty">{mode==='player'&&doubleOnly?'本轮暂无符合条件的双赛球员':'当前筛选无可用数据，请更换指标或降低出场门槛。'}</p>}</div><div className="chart-touch-detail" aria-live="polite">{selected?<><strong>{selected.name}</strong><span>{selected.detail}</span></>:<span>轻点图中球队或球员，查看完整数据</span>}</div>
       </div>
     </div>
   </section>;
@@ -418,7 +424,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
         <p className="gw-stats-note">{active.statsLabel ?? data.statsLabel}</p>
         {data.sourceHealth&&<div className="gw-stats-note" role="status">最近构建：{formatUpdated(data.sourceHealth.generatedAt)} · {data.sourceHealth.sources.map(s=>`${s.name} ${formatUpdated(s.capturedAt)}${s.access==='cloudflare_challenge'?'（源站验证拦截，沿用快照）':s.access&&s.access!=='ok'?'（抓取受阻，沿用快照）':Date.parse(data.sourceHealth!.generatedAt)-Date.parse(s.capturedAt)>36*3600000?'（沿用旧快照）':''}`).join(' · ')}<br/>动作数据严格匹配：{data.sourceHealth.advancedMatched}/{data.sourceHealth.playerCount} 人；未对齐的指标保留缺失，其他来源独立更新。</div>}
-        <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} roundId={active.meta.roundId} historyFile={data.chartHistoryFile} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
+        <OpportunityChart key={"chart-"+active.meta.roundId} historical={actual} roundId={active.meta.roundId} historyFile={data.chartHistoryFile} fixtures={active.fixtures??[]} players={playerStats} teams={teamStats} xgUpdatedAt={active.meta.xgUpdatedAt} officialUpdatedAt={active.meta.updatedAt} />
 
         <StatsTable key={"stats-"+active.meta.roundId} players={playerStats} roundId={active.meta.roundId} />
         <TeamStatsTable key={"teams-"+active.meta.roundId} teams={teamStats} />
