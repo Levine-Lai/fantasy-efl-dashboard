@@ -16,7 +16,9 @@ const confirmedGW7=[4,66,22,22,39,34,8,10,37,35,16,52,29,26,9,32,21,0,4,1,34,2,3
 const gw7=vm.runInContext("standings('drivers','cumulative',7)",context);for(let i=0;i<28;i++)assert.equal(gw7.find(r=>r.ids[0]===i+1).points,confirmedGW7[i]);
 const gw3=vm.runInContext("standings('drivers','weekly',3)",context);assert.equal(gw3.at(-1).name,'Eric');assert.equal(gw3.at(-1).points,0);assert.equal(gw3.at(-1).dq,true);assert.equal(gw3.find(r=>r.name==='bad k').rank,10);assert.equal(gw3.find(r=>r.name==='bad k').base,1);
 const final=vm.runInContext("standings('drivers','cumulative',9)",context);assert.equal(final[0].name,'Benben');assert.equal(final[0].points,108);assert.equal(context.window.LEAGUE_DATA.update.week,weeks);
-assert.equal(context.window.LEAGUE_DATA.update.finalBasis,'user-confirmed-current-scores');
-assert.equal(context.window.LEAGUE_DATA.update.provisional,false);
+const update=context.window.LEAGUE_DATA.update;
+assert.ok(['user-confirmed-current-scores','official-status'].includes(update.finalBasis));
+assert.equal(update.provisional,update.finalBasis==='official-status'&&(update.completedGames!==update.totalGames||update.finalizedGames!==update.totalGames));
+if(weeks>=11){assert.equal(update.leagueId,365);const gw11=vm.runInContext("standings('drivers','weekly',11)",context);assert.equal(gw11[0].name,'FAIAA');assert.equal(gw11[0].raw,152);assert.equal(gw11.find(r=>r.name==='Bamford').fastest,1);assert.equal(context.window.FASTEST_LAPS.weeks[10].maximum,38);}
 const gw10=vm.runInContext("standings('drivers','weekly',10)",context);assert.equal(gw10[0].name,'bad k');assert.equal(gw10[0].points,25);assert.equal(gw10.find(r=>r.name==='Tierney').fastest,1);assert.equal(context.window.FASTEST_LAPS.weeks[9].maximum,48);
 console.log(`${weeks*4} standings verified: all weeks, both modes, both leaderboards.`);console.log(JSON.stringify(vm.runInContext("standings('teams','cumulative',"+weeks+")",context).slice(0,3).map(r=>[r.name,r.points])));

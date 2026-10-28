@@ -12,7 +12,7 @@ const context={window:{}};vm.createContext(context);
 for(const name of ['data','rules','fastest'])vm.runInContext(await fs.readFile(new URL(`../league-standings/${name}.js`,import.meta.url),'utf8'),context);
 const data=context.window.LEAGUE_DATA,laps=context.window.FASTEST_LAPS,week=input.week;
 assert.ok(week===data.orders.length+1 || week===data.orders.length,'Only append or refresh the latest week');
-assert.equal(input.leagueId,100);assert.equal(input.weekly.nextPage,false);
+assert.equal(input.leagueId,365,'Grand Prix results must use league 365');assert.equal(input.weekly.nextPage,false);
 const round=rounds.find(r=>r.id===week);assert.ok(round);
 assert.ok(round.games.every(g=>g.status==='completed'),'Do not finalize captain fallback before all fixtures finish');
 const gameIds=new Set(round.games.map(g=>g.id)),playerScores=new Map(),minutes=new Map(),clubScores=new Map();
