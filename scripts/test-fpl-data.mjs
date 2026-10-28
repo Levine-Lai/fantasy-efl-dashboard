@@ -103,28 +103,40 @@ assert.ok(Math.abs(clubRows.reduce((n,r)=>n+(r.xg??0),0)-clubRows.reduce((n,r)=>
 
 assert.equal(clubRows.reduce((n,r)=>n+r.goals,0),clubRows.reduce((n,r)=>n+r.conceded,0));
 assert.ok(fplTeamRows(data,data.currentEvent,3).every(r=>r.played<=3));
-// Supplemental aggregates must never leak into a shorter/historical sample.
-if(data.supplemental){
-  const supported=clubRows.find(r=>r.bigChances!=null);assert.ok(supported,'At least one aligned supplemental club');
-  const row=data.supplemental.teams.find(t=>t.id===supported.team.id);
+// Test alignment deterministically: a cached live snapshot may have no current matches.
+const supplementalData=structuredClone(toy);supplementalData.season='2026-27';supplementalData.currentEvent=1;
+for(const p of supplementalData.players)p.history=p.history.filter(h=>h.round===1);
+const snapshot={season:supplementalData.season,teams:[{id:1,fixtureIds:[101,102],metrics:{bigChances:4,shots:8}}],players:[{id:1,team:2,fixtureIds:[101,102],minutes:180,officialMinutes:180,metrics:{bigChancesCreated:2}}]};
+assert.deepEqual(alignSupplemental(supplementalData,snapshot),{teams:1,players:1});
+{
+  const supported=fplTeamRows(supplementalData,1).find(r=>r.bigChances!=null);assert.ok(supported);
+  const row=supplementalData.supplemental.teams.find(t=>t.id===supported.team.id);
   assert.equal(supported.bigChances,row.metrics.bigChances);
   assert.equal(supported.bigChancesGame,supported.bigChances/supported.played);
-  assert.equal(fplTeamRows(data,data.currentEvent,1).find(r=>r.team.id===supported.team.id).bigChances,null);
-  assert.equal(fplTeamRows(data,0).find(r=>r.team.id===supported.team.id).shots,null);
-  const mismatch=structuredClone(data);mismatch.supplemental.season='wrong-season';
-  assert.ok(fplTeamRows(mismatch,data.currentEvent).every(r=>r.bigChances==null));
-  const player=data.players.find(p=>p.supplemental&&p.supplemental.fixtureIds.length>1);
-  assert.ok(player);const m=metric('supplement_bigChancesCreated'),sample=matchSample(player,data.currentEvent);
+  assert.equal(fplTeamRows(supplementalData,1,1).find(r=>r.team.id===supported.team.id).bigChances,null);
+  assert.equal(fplTeamRows(supplementalData,0).find(r=>r.team.id===supported.team.id).shots,null);
+  const mismatch=structuredClone(supplementalData);mismatch.supplemental.season='wrong-season';
+  assert.ok(fplTeamRows(mismatch,1).every(r=>r.bigChances==null));
+  const player=supplementalData.players.find(p=>p.supplemental&&p.supplemental.fixtureIds.length>1);
+  assert.ok(player);const m=metric('supplement_bigChancesCreated'),sample=matchSample(player,1);
   assert.equal(m.value(player,sample),player.supplemental.metrics.bigChancesCreated*90/player.supplemental.minutes);
   assert.equal(m.value(player,sample.slice(-1)),null);
   assert.equal(m.value({...player,supplemental:{...player.supplemental,metrics:{bigChancesCreated:null}}},sample),null);
   assert.equal(m.value({...player,supplemental:{...player.supplemental,metrics:{bigChancesCreated:0}}},sample),0);
-  const copy=structuredClone(data);for(const p of copy.players)delete p.supplemental;
+  const copy=structuredClone(supplementalData);for(const p of copy.players)delete p.supplemental;
   assert.deepEqual(alignSupplemental(copy,{season:'wrong-season',teams:[],players:[]}),{teams:0,players:0});
   assert.ok(copy.players.every(p=>!p.supplemental));
-  const invalid=structuredClone(data);invalid.supplemental.teams.forEach(t=>t.fixtureIds=[-1]);
-  assert.ok(fplTeamRows(invalid,data.currentEvent).every(r=>r.bigChances==null),'Different fixtures must remain missing');
+  const invalid=structuredClone(supplementalData);invalid.supplemental.teams.forEach(t=>t.fixtureIds=[-1]);
+  assert.ok(fplTeamRows(invalid,1).every(r=>r.bigChances==null),'Different fixtures must remain missing');
+  invalid.supplemental.players.forEach(p=>p.fixtureIds=[-1]);
+  assert.deepEqual(alignSupplemental(invalid,invalid.supplemental),{teams:0,players:0});
+  assert.ok(invalid.players.every(p=>!p.supplemental),'An outdated snapshot may have zero aligned players');
   assert.throws(()=>normalizeSupplemental(data,{competition:{id:8},hero:{season:'wrong'}},{}),/season/);
+}
+for(const row of clubRows.filter(r=>r.bigChances!=null)){
+  const source=data.supplemental.teams.find(t=>t.id===row.team.id);
+  const ids=data.fixtures.filter(f=>f.finished&&f.event<=data.currentEvent&&(f.home===row.team.id||f.away===row.team.id)).map(f=>f.id).sort((a,b)=>a-b);
+  assert.deepEqual([...source.fixtureIds].sort((a,b)=>a-b),ids,'Live supplementary coverage must match the current fixture sample');
 }
 const checked=data.events.find(e=>e.finished&&e.checked);
 if(checked) {
