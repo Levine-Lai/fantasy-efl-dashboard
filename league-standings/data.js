@@ -10,13 +10,13 @@ window.LEAGUE_DATA = {
       "FAIAA",
       "16",
       "FAIAAAA",
-      5
+      7
     ],
     [
       "Penguin",
       "48",
       "#48 企鹅",
-      24
+      25
     ],
     [
       "last superman",
@@ -28,25 +28,25 @@ window.LEAGUE_DATA = {
       "summerfan",
       "12",
       "Summerfan",
-      6
+      4
     ],
     [
       "faith619",
       "69",
       "faith619",
-      19
+      16
     ],
     [
       "remember",
       "97",
       "remember",
-      20
+      19
     ],
     [
       "average",
       "11",
       "AVG",
-      16
+      18
     ],
     [
       "Golden Sheva",
@@ -64,19 +64,19 @@ window.LEAGUE_DATA = {
       "bad k",
       "35",
       "Super Licence -12",
-      4
+      6
     ],
     [
       "ynwa",
       "9",
       "baoyingsalah",
-      9
+      11
     ],
     [
       "DannytheDestroyer",
       "1",
       "DannytheDestroyer",
-      7
+      5
     ],
     [
       "Eric",
@@ -94,13 +94,13 @@ window.LEAGUE_DATA = {
       "owen",
       "10",
       "DNMCCB",
-      12
+      13
     ],
     [
       "dog egg kk",
       "96",
       "#96 GDKK",
-      13
+      9
     ],
     [
       "bill",
@@ -112,25 +112,25 @@ window.LEAGUE_DATA = {
       "Low Lik Kee",
       "3",
       "X Team",
-      25
+      22
     ],
     [
       "acidboy",
       "88",
       "Acidboy",
-      22
+      24
     ],
     [
       "ocean",
       "44",
       "ocean",
-      18
+      17
     ],
     [
       "wu jiahui",
       "5",
       "Zhongvid Moyes",
-      17
+      20
     ],
     [
       "Bamford",
@@ -142,7 +142,7 @@ window.LEAGUE_DATA = {
       "Tierney",
       "29",
       "五星上将萨金特",
-      11
+      10
     ],
     [
       "Benben",
@@ -154,19 +154,19 @@ window.LEAGUE_DATA = {
       "clocat",
       "19",
       "笨雕先EFL",
-      15
+      14
     ],
     [
       "xzz",
       "21",
       "xzz_11",
-      10
+      12
     ],
     [
       "HindMics",
       "38",
       "HindMics-永城永江足球俱乐部",
-      14
+      15
     ]
   ],
   "orders": [
@@ -499,6 +499,36 @@ window.LEAGUE_DATA = {
       18,
       1,
       21
+    ],
+    [
+      19,
+      17,
+      6,
+      10,
+      13,
+      5,
+      9,
+      21,
+      7,
+      26,
+      24,
+      25,
+      4,
+      11,
+      12,
+      27,
+      2,
+      16,
+      8,
+      14,
+      28,
+      15,
+      23,
+      1,
+      22,
+      18,
+      3,
+      20
     ]
   ],
   "scores": [
@@ -831,6 +861,36 @@ window.LEAGUE_DATA = {
       51,
       38,
       34
+    ],
+    [
+      182,
+      153,
+      146,
+      129,
+      129,
+      128,
+      127,
+      127,
+      126,
+      125,
+      124,
+      124,
+      119,
+      113,
+      112,
+      110,
+      110,
+      109,
+      109,
+      109,
+      103,
+      102,
+      102,
+      102,
+      94,
+      91,
+      83,
+      69
     ]
   ],
   "awards": [
@@ -846,13 +906,13 @@ window.LEAGUE_DATA = {
     1
   ],
   "update": {
-    "week": 11,
-    "capturedAt": "2026-10-28T02:55:51.934Z",
+    "week": 12,
+    "capturedAt": "2026-11-05T15:32:14.631Z",
     "leagueId": 365,
-    "completedGames": 42,
-    "finalizedGames": 36,
-    "totalGames": 42,
-    "provisional": true,
+    "completedGames": 52,
+    "finalizedGames": 52,
+    "totalGames": 52,
+    "provisional": false,
     "finalBasis": "official-status"
   }
 };
