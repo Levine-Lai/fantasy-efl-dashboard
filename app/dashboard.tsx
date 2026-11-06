@@ -237,7 +237,7 @@ function OpportunityChart({ players, teams, fixtures, xgUpdatedAt, officialUpdat
   const candidates = mode === "team" ? windowStats.teams.filter(t=>includesLeague(competition,t.competitionId)) : windowStats.players.filter(p=>eligiblePlayers.has(p.id) && (!doubleOnly||doubleTeams.has(`${p.competitionId}:${p.team}`)) && includesLeague(competition,p.competitionId) && (position==="ALL" || position==="ATT" && ["MID","FWD"].includes(p.position) || p.position===position));
   const dots: AnalyticsDatum[] = candidates.flatMap(row=>{
     const xv=valueFor(row,activeXKey), yv=valueFor(row,activeYKey); if(xv==null || yv==null) return [];
-    return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场" : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
+    return [{id:mode+row.id,name:"perGame" in row ? row.fullName : row.name,image:"perGame" in row ? row.jerseyUrl : row.logo,x:xv,y:yv,subtitle:"perGame" in row ? row.team+" · "+row.appearances+" 场 · 持有率 "+(!historical&&Number.isFinite(row.ownership)?row.ownership.toFixed(1)+"%":"—") : competitionName[row.competitionId]+" · "+row.played+" 场",detail:xLabel+" "+xv.toFixed(2)+" · "+yLabel+" "+yv.toFixed(2)}];
   });
   const selected = dots.find(d=>d.id===(hovered ?? pinned));
   const comparison = mode==="player" && activeXKey==="xg90" && activeYKey==="goals90";
@@ -334,7 +334,7 @@ function OpportunityChart({ players, teams, fixtures, xgUpdatedAt, officialUpdat
 
           <text className="chart-axis-label" x={left + size / 2} y={800} textAnchor="middle">{xLabel+(lowerBetter(activeXKey)?"（向右越低）":" →")}</text>
           <text className="chart-axis-label" x={19} y={top + size / 2} textAnchor="middle" transform={"rotate(-90 19 " + (top + size / 2) + ")"}>{yLabel+(lowerBetter(activeYKey)?"（向上越低）":" ↑")}</text>
-        </svg>{!dots.length && <p className="stats-empty">{mode==='player'&&doubleOnly?'本轮暂无符合条件的双赛球员':'当前筛选无可用数据，请更换指标或降低出场门槛。'}</p>}</div><div className="chart-touch-detail" aria-live="polite">{selected?<><strong>{selected.name}</strong><span>{selected.detail}</span></>:<span>轻点图中球队或球员，查看完整数据</span>}</div>
+        </svg>{!dots.length && <p className="stats-empty">{mode==='player'&&doubleOnly?'本轮暂无符合条件的双赛球员':'当前筛选无可用数据，请更换指标或降低出场门槛。'}</p>}</div><div className="chart-touch-detail" aria-live="polite">{selected?<><strong>{selected.name}</strong>{mode==='player'&&<span>{selected.subtitle}</span>}<span>{selected.detail}</span></>:<span>轻点图中球队或球员，查看完整数据</span>}</div>
       </div>
     </div>
   </section>;
